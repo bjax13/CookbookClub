@@ -109,3 +109,9 @@ Manual testing docs:
 - PR template: `/Users/bryanjackson/Documents/code/CookbookClub/.github/pull_request_template.md`
 - Issue templates: `/Users/bryanjackson/Documents/code/CookbookClub/.github/ISSUE_TEMPLATE`
 - Code ownership: `/Users/bryanjackson/Documents/code/CookbookClub/.github/CODEOWNERS`
+- Dependabot updates: `/Users/bryanjackson/Documents/code/CookbookClub/.github/dependabot.yml`
+
+## Security
+
+- Security policy: `/Users/bryanjackson/Documents/code/CookbookClub/SECURITY.md`
+- Report vulnerabilities through GitHub private security advisories.
