@@ -1,5 +1,8 @@
 # Cookbook Club CLI (MVP)
 
+[![CI](https://github.com/bjax13/CookbookClub/actions/workflows/ci.yml/badge.svg)](https://github.com/bjax13/CookbookClub/actions/workflows/ci.yml)
+[![Release](https://github.com/bjax13/CookbookClub/actions/workflows/release.yml/badge.svg)](https://github.com/bjax13/CookbookClub/actions/workflows/release.yml)
+
 CLI-first implementation of the Cookbook Club product concept.
 
 ## Scope in this MVP
