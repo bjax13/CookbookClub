@@ -103,6 +103,9 @@ Manual testing docs:
 - GitHub Actions workflow: `/Users/bryanjackson/Documents/code/CookbookClub/.github/workflows/ci.yml`
 - Runs on pushes to `main` and all pull requests.
 - Executes `npm ci` and `npm test` on Node 24.
+- Release workflow: `/Users/bryanjackson/Documents/code/CookbookClub/.github/workflows/release.yml`
+  - Runs on pushed tags matching `v*`
+  - Re-runs tests and publishes a GitHub Release with generated notes
 
 ## Collaboration Defaults
 
@@ -115,3 +118,8 @@ Manual testing docs:
 
 - Security policy: `/Users/bryanjackson/Documents/code/CookbookClub/SECURITY.md`
 - Report vulnerabilities through GitHub private security advisories.
+
+## License and Changelog
+
+- License: `/Users/bryanjackson/Documents/code/CookbookClub/LICENSE` (MIT)
+- Changelog: `/Users/bryanjackson/Documents/code/CookbookClub/CHANGELOG.md`
