@@ -23,6 +23,14 @@ function parseJsonStdout(result) {
   return JSON.parse(result.stdout);
 }
 
+test("CLI version reports package version", () => {
+  const result = runCli(["version"]);
+  assert.equal(result.status, 0);
+  const output = parseJsonStdout(result);
+  const packageVersion = JSON.parse(readFileSync(resolve(ROOT_DIR, "package.json"), "utf8")).version;
+  assert.equal(output.version, packageVersion);
+});
+
 test("CLI end-to-end happy path", () => {
   const dir = mkdtempSync(join(tmpdir(), "cookbook-cli-"));
   const dataFile = join(dir, "state.json");

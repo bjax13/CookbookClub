@@ -39,6 +39,7 @@ CLI-first implementation of the Cookbook Club product concept.
 cd /Users/bryanjackson/Documents/code/CookbookClub
 npm install
 npm run start -- help
+npm run start -- version
 ```
 
 Use `--data` to choose a specific state file.
@@ -61,6 +62,16 @@ npm run start -- --storage sqlite --data ./data/dev-state.sqlite data doctor
 npm run start -- --storage sqlite --data ./data/dev-state.sqlite data doctor --repair
 npm run start -- --data ./data/dev-state.json data export --out ./data/backup.json
 npm run start -- --data ./data/restore-state.json data import --in ./data/backup.json
+```
+
+## Quickstart
+
+```bash
+cd /Users/bryanjackson/Documents/code/CookbookClub
+npm install
+npm run start -- --data ./data/quickstart.json club init --name "Cook Book Club" --host-name "Alice"
+npm run start -- --data ./data/quickstart.json meetup schedule --actor user_1 --at 2026-06-01T18:30:00.000Z
+npm run start -- --data ./data/quickstart.json club show
 ```
 
 ## Environment Notes
@@ -106,9 +117,24 @@ Manual testing docs:
 - GitHub Actions workflow: `/Users/bryanjackson/Documents/code/CookbookClub/.github/workflows/ci.yml`
 - Runs on pushes to `main` and all pull requests.
 - Executes `npm ci` and `npm test` on Node 24.
+- Smoke workflow: `/Users/bryanjackson/Documents/code/CookbookClub/.github/workflows/smoke.yml`
+  - Runs representative CLI commands in JSON + SQLite modes.
 - Release workflow: `/Users/bryanjackson/Documents/code/CookbookClub/.github/workflows/release.yml`
   - Runs on pushed tags matching `v*`
   - Re-runs tests and publishes a GitHub Release with generated notes
+
+## Troubleshooting
+
+- `Error: Node.js 24+ is required`:
+  - Install Node 24+, then rerun `npm install`.
+- `Image path not found` when running `recipe add`:
+  - Pass an absolute path to a real local file via `--image`.
+- `No such built-in module: node:sqlite`:
+  - You are running an older Node version; verify `node --version` is 24+.
+- `data doctor` reports JSON issues:
+  - Run `npm run start -- --storage sqlite --data <dbfile> data doctor --repair`.
+- CLI command not recognized:
+  - Run `npm run start -- help` and confirm exact subcommand spelling.
 
 ## Collaboration Defaults
 

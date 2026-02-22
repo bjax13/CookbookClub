@@ -1,0 +1,42 @@
+name: Smoke
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: JSON storage smoke commands
+        run: |
+          mkdir -p ./tmp-smoke
+          npm run start -- --data ./tmp-smoke/state.json club init --name "Smoke Club" --host-name "Alice"
+          npm run start -- --data ./tmp-smoke/state.json meetup schedule --actor user_1 --at 2026-06-01T18:30:00.000Z
+          npm run start -- --data ./tmp-smoke/state.json notify list --now 2026-06-01T18:30:00.000Z
+          npm run start -- --data ./tmp-smoke/state.json data export --out ./tmp-smoke/backup.json
+
+      - name: SQLite storage smoke commands
+        run: |
+          npm run start -- --storage sqlite --data ./tmp-smoke/state.sqlite club init --name "Smoke SQLite Club" --host-name "Alice"
+          npm run start -- --storage sqlite --data ./tmp-smoke/state.sqlite data info
+          npm run start -- --storage sqlite --data ./tmp-smoke/state.sqlite data doctor

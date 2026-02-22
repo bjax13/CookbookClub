@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { CookbookClubService } from "./service.js";
 import { exportStateToFile, importStateFromFile, loadState, resolveDataFile, saveState } from "./storage.js";
 import { getSqliteStorageInfo, repairSqliteStorage, runSqliteDoctor } from "./sqlite-storage.js";
@@ -99,6 +100,12 @@ function writeJsonFile(path, payload) {
   return absolute;
 }
 
+function cliVersion() {
+  const packagePath = resolve(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
+  const raw = readFileSync(packagePath, "utf8");
+  return JSON.parse(raw).version;
+}
+
 function printHelp() {
   const help = `
 Cookbook Club CLI (MVP)
@@ -142,6 +149,7 @@ Commands:
   data doctor [--repair]
   notify list [--now <ISO datetime>] [--user <userId>]
   notify run [--now <ISO datetime>]
+  version
   help
 `;
   process.stdout.write(help.trimStart());
@@ -175,7 +183,7 @@ function main() {
   const args = parseArgs(raw);
   const commandKey = `${args.command}:${args.subcommand || ""}`;
   const filePath = resolveDataFile(dataPath, storage);
-  const stateFreeCommands = new Set(["help:", "data:info", "data:doctor", "data:import"]);
+  const stateFreeCommands = new Set(["help:", "data:info", "data:doctor", "data:import", "version:"]);
   const state = stateFreeCommands.has(commandKey) ? null : loadState(filePath, storage);
   const service = state ? new CookbookClubService(state) : null;
 
@@ -187,6 +195,12 @@ function main() {
       shouldSave = false;
       printHelp();
       return;
+    case "version:":
+      shouldSave = false;
+      output = {
+        version: cliVersion()
+      };
+      break;
     case "club:init":
       output = service.initClub({
         clubName: required(args.options, "name"),

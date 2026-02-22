@@ -18,13 +18,22 @@ npm test
 
 2. Commit release-prep changes to `main`.
 
-3. Create and push an annotated tag:
+3. Bump package version without creating a tag:
+
+```bash
+npm version X.Y.Z --no-git-tag-version
+git add package.json package-lock.json CHANGELOG.md
+git commit -m "Release prep vX.Y.Z"
+git push
+```
+
+4. Create and push an annotated tag:
 
 ```bash
 npm run release:tag
 ```
 
-4. Confirm release workflow success:
+5. Confirm release workflow success:
 
 ```bash
 gh run list --limit 5

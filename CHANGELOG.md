@@ -8,12 +8,27 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ### Added
 
-- Release process guide in `docs/release-process.md`.
+- (none)
 
 ### Changed
 
-- Package metadata updated to include repository, bugs, and homepage fields.
-- Package version aligned with latest published tag (`0.1.1`).
+- (none)
+
+## [0.1.2] - 2026-02-22
+
+### Added
+
+- Smoke test workflow (`.github/workflows/smoke.yml`) for JSON + SQLite command checks.
+- CLI `version` command with integration coverage.
+- Quickstart and troubleshooting sections in README.
+- Safer release helper script (`npm run release:tag`) with branch/state/tag/test guards.
+- Release process guide updates to include explicit version-bump sequence.
+
+### Changed
+
+- Package metadata now includes `repository`, `bugs`, and `homepage`.
+- Package version is aligned with published tags.
+- Release docs now reference the automated tagging command.
 
 ## [0.1.1] - 2026-02-22
 
