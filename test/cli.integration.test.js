@@ -215,6 +215,17 @@ test("CLI can export and import state snapshots", () => {
   assert.equal(snapshot.host.name, "Alice");
 });
 
+test("CLI import rejects invalid backup snapshots", () => {
+  const dir = mkdtempSync(join(tmpdir(), "cookbook-cli-"));
+  const dataFile = join(dir, "state.json");
+  const invalid = join(dir, "invalid.json");
+  writeFileSync(invalid, JSON.stringify({ clubs: "wrong-shape" }), "utf8");
+
+  const result = runCli(["--data", dataFile, "data", "import", "--in", invalid]);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Invalid snapshot for import/);
+});
+
 test("CLI can verify backup snapshots", () => {
   const dir = mkdtempSync(join(tmpdir(), "cookbook-cli-"));
   const dataFile = join(dir, "state.json");
@@ -290,9 +301,44 @@ test("CLI data info reports sqlite migration versions and counts", () => {
   result = runCli(["--storage", "sqlite", "--data", dbFile, "data", "info"]);
   assert.equal(result.status, 0);
   const info = parseJsonStdout(result);
-  assert.deepEqual(info.versions, [1, 2, 3, 4]);
+  assert.deepEqual(info.versions, [1, 2, 3, 4, 5]);
   assert.equal(info.counts.clubs, 1);
   assert.equal(info.counts.users, 1);
+});
+
+test("sqlite schema enforces foreign keys", () => {
+  const dir = mkdtempSync(join(tmpdir(), "cookbook-cli-"));
+  const dbFile = join(dir, "fk.sqlite");
+
+  let result = runCli([
+    "--storage",
+    "sqlite",
+    "--data",
+    dbFile,
+    "club",
+    "init",
+    "--name",
+    "FK Club",
+    "--host-name",
+    "Alice"
+  ]);
+  assert.equal(result.status, 0);
+
+  const db = new DatabaseSync(dbFile);
+  try {
+    db.exec("PRAGMA foreign_keys = ON;");
+    assert.throws(
+      () =>
+        db
+          .prepare(
+            "INSERT INTO memberships (id, club_id, user_id, role, joined_at, cookbook_access_from) VALUES (?, ?, ?, ?, ?, ?)"
+          )
+          .run("membership_bad", "club_missing", "user_missing", "member", "2026-01-01T00:00:00.000Z", null),
+      /FOREIGN KEY/
+    );
+  } finally {
+    db.close();
+  }
 });
 
 test("legacy sqlite app_state is migrated into normalized tables", () => {
