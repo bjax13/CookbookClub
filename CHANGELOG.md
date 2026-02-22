@@ -11,12 +11,14 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Import guard now rejects invalid backup snapshots before write.
 - SQLite schema migration `v5` adds foreign-key enforcement.
 - CI/release workflows pin GitHub Actions by commit SHA.
+- Security audit workflow runs `npm audit --omit=dev --audit-level=high` on PRs/pushes and weekly schedule.
 
 ### Changed
 
 - Branch protection now requires `test (24)`, `test (25)`, and `smoke`.
 - CI/smoke workflows explicitly use least-privilege `contents: read` permissions.
 - `.gitignore` now excludes generated SQLite and backup artifacts.
+- Manual verification script now matches Node 24+ runtime and includes backup verification before import.
 
 ## [0.1.3] - 2026-02-22
 
