@@ -97,3 +97,9 @@ Manual testing docs:
 
 - `docs/manual-testing.md` (scenario-based checklist with expected outcomes)
 - `docs/manual-verification.md` (quick command script)
+
+## CI
+
+- GitHub Actions workflow: `/Users/bryanjackson/Documents/code/CookbookClub/.github/workflows/ci.yml`
+- Runs on pushes to `main` and all pull requests.
+- Executes `npm ci` and `npm test` on Node 24.
