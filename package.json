@@ -20,7 +20,8 @@
     "pretest": "node ./scripts/check-node-version.js",
     "preinstall": "node ./scripts/check-node-version.js",
     "start": "./scripts/with-dev-path.sh node ./src/cli.js",
-    "test": "./scripts/with-dev-path.sh node --test"
+    "test": "./scripts/with-dev-path.sh node --test",
+    "release:tag": "./scripts/release-tag.sh"
   },
   "engines": {
     "node": ">=24"

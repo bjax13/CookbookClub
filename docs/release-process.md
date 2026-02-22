@@ -21,8 +21,7 @@ npm test
 3. Create and push an annotated tag:
 
 ```bash
-git tag -a vX.Y.Z -m "Release vX.Y.Z"
-git push origin vX.Y.Z
+npm run release:tag
 ```
 
 4. Confirm release workflow success:
@@ -36,3 +35,8 @@ gh release view vX.Y.Z
 
 - Workflow file: `.github/workflows/release.yml`
 - Release notes are generated automatically by GitHub.
+- Tag creation script: `scripts/release-tag.sh`
+  - requires clean working tree
+  - requires current branch to be `main`
+  - validates that the tag does not already exist
+  - runs `npm test` before tagging
