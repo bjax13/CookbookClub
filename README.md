@@ -56,11 +56,13 @@ npm run start -- --data ./data/dev-state.json club export-reminder-templates --o
 npm run start -- --data ./data/dev-state.json club import-reminder-templates --actor user_1 --in ./data/templates.json --prefix shared
 npm run start -- --data ./data/dev-state.json meetup list
 npm run start -- --data ./data/dev-state.json meetup show --id meetup_1
+npm run start -- --data ./data/dev-state.json status
 npm run start -- --storage sqlite --data ./data/dev-state.sqlite club init --name "Cook Book Club" --host-name "Alice"
 npm run start -- --storage sqlite --data ./data/dev-state.sqlite data info
 npm run start -- --storage sqlite --data ./data/dev-state.sqlite data doctor
 npm run start -- --storage sqlite --data ./data/dev-state.sqlite data doctor --repair
 npm run start -- --data ./data/dev-state.json data export --out ./data/backup.json
+npm run start -- data verify-backup --in ./data/backup.json
 npm run start -- --data ./data/restore-state.json data import --in ./data/backup.json
 ```
 
@@ -72,6 +74,7 @@ npm install
 npm run start -- --data ./data/quickstart.json club init --name "Cook Book Club" --host-name "Alice"
 npm run start -- --data ./data/quickstart.json meetup schedule --actor user_1 --at 2026-06-01T18:30:00.000Z
 npm run start -- --data ./data/quickstart.json club show
+npm run start -- --data ./data/quickstart.json status
 ```
 
 ## Environment Notes
@@ -116,9 +119,9 @@ Manual testing docs:
 
 - GitHub Actions workflow: `/Users/bryanjackson/Documents/code/CookbookClub/.github/workflows/ci.yml`
 - Runs on pushes to `main` and all pull requests.
-- Executes `npm ci` and `npm test` on Node 24.
+- Executes `npm ci` and `npm test` on Node 24 and 25.
 - Smoke workflow: `/Users/bryanjackson/Documents/code/CookbookClub/.github/workflows/smoke.yml`
-  - Runs representative CLI commands in JSON + SQLite modes.
+  - Runs representative CLI commands in JSON + SQLite modes (using deterministic fixture inputs).
 - Release workflow: `/Users/bryanjackson/Documents/code/CookbookClub/.github/workflows/release.yml`
   - Runs on pushed tags matching `v*`
   - Re-runs tests and publishes a GitHub Release with generated notes
@@ -133,6 +136,8 @@ Manual testing docs:
   - You are running an older Node version; verify `node --version` is 24+.
 - `data doctor` reports JSON issues:
   - Run `npm run start -- --storage sqlite --data <dbfile> data doctor --repair`.
+- Backup validation before import:
+  - Run `npm run start -- data verify-backup --in <snapshot.json>`.
 - CLI command not recognized:
   - Run `npm run start -- help` and confirm exact subcommand spelling.
 

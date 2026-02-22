@@ -48,3 +48,85 @@ export function importStateFromFile(sourcePath) {
   }
   return loadState(absolute);
 }
+
+function validateSnapshotShape(value) {
+  const issues = [];
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    issues.push("Top-level value must be an object.");
+    return issues;
+  }
+
+  const requiredArrays = [
+    "clubs",
+    "users",
+    "memberships",
+    "meetups",
+    "recipes",
+    "favorites",
+    "personalCollections",
+    "collectionItems",
+    "cookbookAccessGrants",
+    "notifications"
+  ];
+  for (const key of requiredArrays) {
+    if (!Array.isArray(value[key])) {
+      issues.push(`Field \`${key}\` must be an array.`);
+    }
+  }
+
+  if (!value.counters || typeof value.counters !== "object" || Array.isArray(value.counters)) {
+    issues.push("Field `counters` must be an object.");
+  } else {
+    for (const [key, raw] of Object.entries(value.counters)) {
+      if (!Number.isFinite(Number(raw)) || Number(raw) < 0) {
+        issues.push(`Counter \`${key}\` must be a non-negative number.`);
+      }
+    }
+  }
+
+  return issues;
+}
+
+export function verifyStateSnapshotFile(sourcePath) {
+  const absolute = resolve(process.cwd(), sourcePath);
+  if (!existsSync(absolute)) {
+    throw new Error(`Snapshot file not found: ${absolute}`);
+  }
+
+  const raw = readFileSync(absolute, "utf8").trim();
+  if (!raw) {
+    return {
+      filePath: absolute,
+      ok: false,
+      issues: ["Snapshot file is empty."]
+    };
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    return {
+      filePath: absolute,
+      ok: false,
+      issues: [`Invalid JSON: ${error.message}`]
+    };
+  }
+
+  const issues = validateSnapshotShape(parsed);
+  return {
+    filePath: absolute,
+    ok: issues.length === 0,
+    issues,
+    counts:
+      issues.length === 0
+        ? {
+            clubs: parsed.clubs.length,
+            users: parsed.users.length,
+            meetups: parsed.meetups.length,
+            recipes: parsed.recipes.length,
+            notifications: parsed.notifications.length
+          }
+        : null
+  };
+}

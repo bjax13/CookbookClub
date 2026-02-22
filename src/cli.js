@@ -3,7 +3,14 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CookbookClubService } from "./service.js";
-import { exportStateToFile, importStateFromFile, loadState, resolveDataFile, saveState } from "./storage.js";
+import {
+  exportStateToFile,
+  importStateFromFile,
+  loadState,
+  resolveDataFile,
+  saveState,
+  verifyStateSnapshotFile
+} from "./storage.js";
 import { getSqliteStorageInfo, repairSqliteStorage, runSqliteDoctor } from "./sqlite-storage.js";
 
 function parseArgs(argv) {
@@ -145,10 +152,12 @@ Commands:
   access grant-past --actor <userId> --user <userId> [--from-meetup <meetupId> | --all]
   data export --out <path>
   data import --in <path>
+  data verify-backup --in <path>
   data info
   data doctor [--repair]
   notify list [--now <ISO datetime>] [--user <userId>]
   notify run [--now <ISO datetime>]
+  status
   version
   help
 `;
@@ -172,6 +181,56 @@ function formatClubSnapshot(snapshot) {
   };
 }
 
+function buildStatus({ state, service, storage, filePath }) {
+  const pendingNotifications = state.notifications.filter((entry) => !entry.deliveredAt).length;
+  if (!state.clubs.length) {
+    return {
+      initialized: false,
+      storage,
+      dataFile: filePath,
+      counts: {
+        users: state.users.length,
+        pendingNotifications
+      }
+    };
+  }
+
+  const { club, host, upcoming } = service.showClub();
+  const memberCount = state.memberships.filter((entry) => entry.clubId === club.id).length;
+  const clubRecipeCount = state.recipes.filter((entry) => entry.clubId === club.id).length;
+  const upcomingRecipeCount = upcoming
+    ? state.recipes.filter((entry) => entry.meetupId === upcoming.id).length
+    : 0;
+  return {
+    initialized: true,
+    storage,
+    dataFile: filePath,
+    club: {
+      id: club.id,
+      name: club.name,
+      membershipPolicy: club.membershipPolicy
+    },
+    host: {
+      id: host.id,
+      name: host.name
+    },
+    upcomingMeetup: upcoming
+      ? {
+          id: upcoming.id,
+          scheduledFor: upcoming.scheduledFor,
+          theme: upcoming.theme,
+          status: upcoming.status
+        }
+      : null,
+    counts: {
+      members: memberCount,
+      recipes: clubRecipeCount,
+      upcomingMeetupRecipes: upcomingRecipeCount,
+      pendingNotifications
+    }
+  };
+}
+
 function main() {
   const raw = process.argv.slice(2);
   const dataPath = takeGlobalOption(raw, "--data");
@@ -183,7 +242,14 @@ function main() {
   const args = parseArgs(raw);
   const commandKey = `${args.command}:${args.subcommand || ""}`;
   const filePath = resolveDataFile(dataPath, storage);
-  const stateFreeCommands = new Set(["help:", "data:info", "data:doctor", "data:import", "version:"]);
+  const stateFreeCommands = new Set([
+    "help:",
+    "data:info",
+    "data:doctor",
+    "data:import",
+    "data:verify-backup",
+    "version:"
+  ]);
   const state = stateFreeCommands.has(commandKey) ? null : loadState(filePath, storage);
   const service = state ? new CookbookClubService(state) : null;
 
@@ -200,6 +266,14 @@ function main() {
       output = {
         version: cliVersion()
       };
+      break;
+    case "status:":
+      output = buildStatus({
+        state,
+        service,
+        storage,
+        filePath
+      });
       break;
     case "club:init":
       output = service.initClub({
@@ -394,6 +468,10 @@ function main() {
       shouldSave = false;
       break;
     }
+    case "data:verify-backup":
+      shouldSave = false;
+      output = verifyStateSnapshotFile(required(args.options, "in"));
+      break;
     case "data:info":
       output =
         storage === "sqlite"
