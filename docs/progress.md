@@ -77,6 +77,10 @@ Updated: 2026-02-22
 - Security posture improvements:
   - dependency audit workflow (`.github/workflows/security-audit.yml`)
   - weekly + PR/push high-severity npm audit checks
+- Web MVP transition started:
+  - lightweight HTTP server in `src/web/server.js` and entrypoint `src/web.js`
+  - static control panel UI in `src/web/public`
+  - integration coverage in `test/web.integration.test.js`
 
 ## In Progress
 

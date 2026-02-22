@@ -12,6 +12,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - SQLite schema migration `v5` adds foreign-key enforcement.
 - CI/release workflows pin GitHub Actions by commit SHA.
 - Security audit workflow runs `npm audit --omit=dev --audit-level=high` on PRs/pushes and weekly schedule.
+- Thin web MVP server (`npm run start:web`) with API + static UI for club init, meetup scheduling, member invite, and recipe flows.
+- Web integration test suite covering API and static app shell.
 
 ### Changed
 

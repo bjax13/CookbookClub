@@ -80,3 +80,17 @@ npm run start -- data verify-backup --in ./data/backup.json
 npm run start -- --data ./data/restored-state.json data import --in ./data/backup.json
 npm run start -- --data ./data/restored-state.json club show
 ```
+
+Web MVP quick check:
+
+```bash
+npm run start:web -- --host 127.0.0.1 --port 4173 --data ./data/web-dev-state.json
+```
+
+Then open `http://127.0.0.1:4173` and run:
+
+- Initialize Club
+- Add Member
+- Schedule Meetup
+- Add Recipe
+- List Upcoming Recipes
