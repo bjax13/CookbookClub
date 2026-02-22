@@ -3,7 +3,7 @@
 [![CI](https://github.com/bjax13/CookbookClub/actions/workflows/ci.yml/badge.svg)](https://github.com/bjax13/CookbookClub/actions/workflows/ci.yml)
 [![Release](https://github.com/bjax13/CookbookClub/actions/workflows/release.yml/badge.svg)](https://github.com/bjax13/CookbookClub/actions/workflows/release.yml)
 
-CLI-first implementation of the Cookbook Club product concept.
+CLI-first implementation of the Cookbook Club product concept with a thin web MVP layer.
 
 ## Scope in this MVP
 
@@ -44,6 +44,14 @@ npm run start -- version
 
 Use `--data` to choose a specific state file.
 Use `--storage` to choose persistence backend (`json` default, or `sqlite`).
+
+Start web MVP:
+
+```bash
+npm run start:web -- --port 4173 --host 127.0.0.1 --data ./data/web-state.json
+```
+
+Open `http://127.0.0.1:4173`.
 
 ```bash
 npm run start -- --data ./data/dev-state.json club init --name "Cook Book Club" --host-name "Alice"
@@ -109,6 +117,7 @@ Test suites are in:
 
 - `test/service.test.js` (domain/service behavior)
 - `test/cli.integration.test.js` (command-level flows)
+- `test/web.integration.test.js` (HTTP API and web shell flows)
 
 Manual testing docs:
 

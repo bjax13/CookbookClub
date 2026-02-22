@@ -20,6 +20,7 @@
     "pretest": "node ./scripts/check-node-version.js",
     "preinstall": "node ./scripts/check-node-version.js",
     "start": "./scripts/with-dev-path.sh node ./src/cli.js",
+    "start:web": "./scripts/with-dev-path.sh node ./src/web.js",
     "test": "./scripts/with-dev-path.sh node --test",
     "release:tag": "./scripts/release-tag.sh"
   },

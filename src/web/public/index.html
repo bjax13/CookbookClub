@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cookbook Club Web MVP</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="layout">
+      <header class="hero">
+        <p class="eyebrow">Cookbook Club</p>
+        <h1>Web MVP Control Panel</h1>
+        <p class="subtitle">Thin UI layer over existing CLI service logic.</p>
+        <button id="refresh" type="button">Refresh Status</button>
+      </header>
+
+      <section class="card">
+        <h2>Status</h2>
+        <pre id="statusView">Loading...</pre>
+      </section>
+
+      <section class="card grid">
+        <div>
+          <h2>Initialize Club</h2>
+          <form id="initClubForm">
+            <label>Club name <input name="clubName" value="Cook Book Club" required /></label>
+            <label>Host name <input name="hostName" value="Alice" required /></label>
+            <button type="submit">Initialize</button>
+          </form>
+        </div>
+
+        <div>
+          <h2>Add Member</h2>
+          <form id="addMemberForm">
+            <label>User name <input name="name" value="Bob" required /></label>
+            <button type="submit">Create User + Invite</button>
+          </form>
+          <p class="hint">Invites as actor <code>user_1</code>.</p>
+        </div>
+      </section>
+
+      <section class="card grid">
+        <div>
+          <h2>Schedule Meetup</h2>
+          <form id="scheduleForm">
+            <label>Actor user ID <input name="actorUserId" value="user_1" required /></label>
+            <label>ISO datetime <input name="isoDateTime" value="2026-06-01T18:30:00.000Z" required /></label>
+            <button type="submit">Schedule</button>
+          </form>
+        </div>
+
+        <div>
+          <h2>Add Recipe</h2>
+          <form id="addRecipeForm">
+            <label>Actor user ID <input name="actorUserId" value="user_1" required /></label>
+            <label>Title <input name="title" value="Tomato Soup" required /></label>
+            <label>Content <input name="content" value="Roast tomatoes, blend, simmer." required /></label>
+            <label>Image path <input name="imagePath" value="/Users/bryanjackson/Documents/code/CookbookClub/test/fixtures/test-recipe.jpg" required /></label>
+            <button type="submit">Add Recipe</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>List Upcoming Recipes</h2>
+        <form id="listRecipesForm" class="inline-form">
+          <label>Actor user ID <input name="actorUserId" value="user_1" required /></label>
+          <button type="submit">Load Recipes</button>
+        </form>
+        <pre id="recipesView">[]</pre>
+      </section>
+
+      <section class="card">
+        <h2>Last API Result</h2>
+        <pre id="resultView">No actions yet.</pre>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

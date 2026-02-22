@@ -1,0 +1,110 @@
+:root {
+  --bg: #f6f1e9;
+  --ink: #1e2a2f;
+  --accent: #b04b2a;
+  --card: #fffdf8;
+  --line: #d5c6b5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Avenir Next", "Gill Sans", sans-serif;
+  color: var(--ink);
+  background: radial-gradient(circle at 5% 5%, #fff8ef 0%, var(--bg) 40%, #eadfce 100%);
+}
+
+.layout {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 1.25rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.hero {
+  background: linear-gradient(130deg, #2c3d41 0%, #3f524f 60%, #6f7f6f 100%);
+  color: #f9f7f2;
+  border-radius: 14px;
+  padding: 1.25rem;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0;
+  font-size: 0.75rem;
+}
+
+.hero h1 {
+  margin: 0.4rem 0;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+}
+
+.subtitle {
+  margin-top: 0;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 1rem;
+}
+
+.grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+label {
+  display: grid;
+  gap: 0.4rem;
+  margin-bottom: 0.8rem;
+  font-size: 0.95rem;
+}
+
+input,
+button {
+  font: inherit;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid #c6b39e;
+}
+
+button {
+  background: var(--accent);
+  color: #fff9f2;
+  border-color: transparent;
+  cursor: pointer;
+}
+
+button:hover {
+  filter: brightness(1.05);
+}
+
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: end;
+}
+
+pre {
+  margin: 0;
+  padding: 0.8rem;
+  background: #1f2526;
+  color: #f4f4f4;
+  border-radius: 10px;
+  overflow-x: auto;
+  font-size: 0.85rem;
+}
+
+.hint {
+  margin: 0;
+  color: #5b5e5c;
+}
