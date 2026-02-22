@@ -103,3 +103,9 @@ Manual testing docs:
 - GitHub Actions workflow: `/Users/bryanjackson/Documents/code/CookbookClub/.github/workflows/ci.yml`
 - Runs on pushes to `main` and all pull requests.
 - Executes `npm ci` and `npm test` on Node 24.
+
+## Collaboration Defaults
+
+- PR template: `/Users/bryanjackson/Documents/code/CookbookClub/.github/pull_request_template.md`
+- Issue templates: `/Users/bryanjackson/Documents/code/CookbookClub/.github/ISSUE_TEMPLATE`
+- Code ownership: `/Users/bryanjackson/Documents/code/CookbookClub/.github/CODEOWNERS`

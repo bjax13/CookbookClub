@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Usage and manual verification guide
+    url: https://github.com/bjax13/CookbookClub/blob/main/docs/manual-verification.md
+    about: Check command examples and expected outputs.
