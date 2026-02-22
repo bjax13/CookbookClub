@@ -122,6 +122,8 @@ Manual testing docs:
 - Executes `npm ci` and `npm test` on Node 24 and 25.
 - Smoke workflow: `/Users/bryanjackson/Documents/code/CookbookClub/.github/workflows/smoke.yml`
   - Runs representative CLI commands in JSON + SQLite modes (using deterministic fixture inputs).
+- Security audit workflow: `/Users/bryanjackson/Documents/code/CookbookClub/.github/workflows/security-audit.yml`
+  - Runs `npm audit --omit=dev --audit-level=high` on PRs/pushes and weekly schedule.
 - Release workflow: `/Users/bryanjackson/Documents/code/CookbookClub/.github/workflows/release.yml`
   - Runs on pushed tags matching `v*`
   - Re-runs tests and publishes a GitHub Release with generated notes

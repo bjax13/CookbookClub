@@ -74,10 +74,13 @@ Updated: 2026-02-22
   - PATH bootstrap wrapper `scripts/with-dev-path.sh`
   - npm scripts now run through the wrapper (`npm run start`, `npm test`)
   - README install guidance (`npm link` / `npx <repo-path>`)
+- Security posture improvements:
+  - dependency audit workflow (`.github/workflows/security-audit.yml`)
+  - weekly + PR/push high-severity npm audit checks
 
 ## In Progress
 
-- Optional polish: add deeper corruption handling and rollback-friendly recovery guides.
+- Optional polish: deepen corruption recovery playbook with full restore drills.
 
 ## Blockers
 

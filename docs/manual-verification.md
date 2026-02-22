@@ -1,10 +1,10 @@
 # Manual Verification Script
 
-Use this command set after installing Node.js 20+.
+Use this command set after installing Node.js 24+.
 
 ```bash
 cd /Users/bryanjackson/Documents/code/CookbookClub
-rm -f ./data/dev-state.json
+rm -f ./data/dev-state.json ./data/dev-state.sqlite ./data/backup.json ./data/reminder-templates.json
 ```
 
 Initialize:
@@ -76,6 +76,7 @@ Backup/restore:
 
 ```bash
 npm run start -- --data ./data/dev-state.json data export --out ./data/backup.json
+npm run start -- data verify-backup --in ./data/backup.json
 npm run start -- --data ./data/restored-state.json data import --in ./data/backup.json
 npm run start -- --data ./data/restored-state.json club show
 ```
