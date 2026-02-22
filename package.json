@@ -8,10 +8,13 @@
     "cookbook-club": "./src/cli.js"
   },
   "scripts": {
+    "prestart": "node ./scripts/check-node-version.js",
+    "pretest": "node ./scripts/check-node-version.js",
+    "preinstall": "node ./scripts/check-node-version.js",
     "start": "./scripts/with-dev-path.sh node ./src/cli.js",
     "test": "./scripts/with-dev-path.sh node --test"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   }
 }

@@ -31,7 +31,7 @@ CLI-first implementation of the Cookbook Club product concept.
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 24+
 
 ## Usage
 

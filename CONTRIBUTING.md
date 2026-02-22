@@ -8,6 +8,8 @@ npm install
 npm test
 ```
 
+Node.js 24+ is required.
+
 ## Development Rules
 
 - Keep changes focused and small.
