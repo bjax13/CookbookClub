@@ -26,6 +26,11 @@ function columnExists(db, table, column) {
   return rows.some((row) => row.name === column);
 }
 
+function tableHasForeignKeys(db, table) {
+  const rows = db.prepare(`PRAGMA foreign_key_list(${table})`).all();
+  return rows.length > 0;
+}
+
 function applyMigration1(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -287,6 +292,191 @@ function applyMigration4(db) {
   }
 }
 
+function applyMigration5(db) {
+  if (tableHasForeignKeys(db, "memberships")) return;
+
+  db.exec("PRAGMA foreign_keys = OFF;");
+  db.exec("BEGIN");
+  try {
+    db.exec(`
+      CREATE TABLE memberships_new (
+        id TEXT PRIMARY KEY,
+        club_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        joined_at TEXT NOT NULL,
+        cookbook_access_from TEXT,
+        FOREIGN KEY (club_id) REFERENCES clubs(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE meetups_new (
+        id TEXT PRIMARY KEY,
+        club_id TEXT NOT NULL,
+        host_user_id TEXT NOT NULL,
+        scheduled_for TEXT,
+        theme TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (club_id) REFERENCES clubs(id) ON DELETE CASCADE,
+        FOREIGN KEY (host_user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE recipes_new (
+        id TEXT PRIMARY KEY,
+        club_id TEXT NOT NULL,
+        meetup_id TEXT NOT NULL,
+        author_user_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        image_path TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (club_id) REFERENCES clubs(id) ON DELETE CASCADE,
+        FOREIGN KEY (meetup_id) REFERENCES meetups_new(id) ON DELETE CASCADE,
+        FOREIGN KEY (author_user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE favorites_new (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        recipe_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (recipe_id) REFERENCES recipes_new(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE personal_collections_new (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE collection_items_new (
+        id TEXT PRIMARY KEY,
+        collection_id TEXT NOT NULL,
+        recipe_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (collection_id) REFERENCES personal_collections_new(id) ON DELETE CASCADE,
+        FOREIGN KEY (recipe_id) REFERENCES recipes_new(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE cookbook_access_grants_new (
+        id TEXT PRIMARY KEY,
+        club_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        meetup_id TEXT NOT NULL,
+        granted_by_user_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (club_id) REFERENCES clubs(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (meetup_id) REFERENCES meetups_new(id) ON DELETE CASCADE,
+        FOREIGN KEY (granted_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE notifications_new (
+        id TEXT PRIMARY KEY,
+        club_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        key TEXT,
+        payload_json TEXT NOT NULL,
+        due_at TEXT,
+        created_at TEXT NOT NULL,
+        delivered_at TEXT,
+        FOREIGN KEY (club_id) REFERENCES clubs(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+    `);
+
+    db.exec(`
+      INSERT INTO memberships_new (id, club_id, user_id, role, joined_at, cookbook_access_from)
+      SELECT m.id, m.club_id, m.user_id, m.role, m.joined_at, m.cookbook_access_from
+      FROM memberships m
+      JOIN clubs c ON c.id = m.club_id
+      JOIN users u ON u.id = m.user_id;
+
+      INSERT INTO meetups_new (id, club_id, host_user_id, scheduled_for, theme, status, created_at)
+      SELECT mt.id, mt.club_id, mt.host_user_id, mt.scheduled_for, mt.theme, mt.status, mt.created_at
+      FROM meetups mt
+      JOIN clubs c ON c.id = mt.club_id
+      JOIN users u ON u.id = mt.host_user_id;
+
+      INSERT INTO recipes_new (id, club_id, meetup_id, author_user_id, title, content, image_path, created_at)
+      SELECT r.id, r.club_id, r.meetup_id, r.author_user_id, r.title, r.content, r.image_path, r.created_at
+      FROM recipes r
+      JOIN clubs c ON c.id = r.club_id
+      JOIN meetups_new m ON m.id = r.meetup_id
+      JOIN users u ON u.id = r.author_user_id;
+
+      INSERT INTO favorites_new (id, user_id, recipe_id, created_at)
+      SELECT f.id, f.user_id, f.recipe_id, f.created_at
+      FROM favorites f
+      JOIN users u ON u.id = f.user_id
+      JOIN recipes_new r ON r.id = f.recipe_id;
+
+      INSERT INTO personal_collections_new (id, user_id, name, created_at)
+      SELECT pc.id, pc.user_id, pc.name, pc.created_at
+      FROM personal_collections pc
+      JOIN users u ON u.id = pc.user_id;
+
+      INSERT INTO collection_items_new (id, collection_id, recipe_id, created_at)
+      SELECT ci.id, ci.collection_id, ci.recipe_id, ci.created_at
+      FROM collection_items ci
+      JOIN personal_collections_new pc ON pc.id = ci.collection_id
+      JOIN recipes_new r ON r.id = ci.recipe_id;
+
+      INSERT INTO cookbook_access_grants_new (id, club_id, user_id, meetup_id, granted_by_user_id, created_at)
+      SELECT cag.id, cag.club_id, cag.user_id, cag.meetup_id, cag.granted_by_user_id, cag.created_at
+      FROM cookbook_access_grants cag
+      JOIN clubs c ON c.id = cag.club_id
+      JOIN users u ON u.id = cag.user_id
+      JOIN meetups_new m ON m.id = cag.meetup_id
+      JOIN users gu ON gu.id = cag.granted_by_user_id;
+
+      INSERT INTO notifications_new (id, club_id, user_id, type, key, payload_json, due_at, created_at, delivered_at)
+      SELECT n.id, n.club_id, n.user_id, n.type, n.key, n.payload_json, n.due_at, n.created_at, n.delivered_at
+      FROM notifications n
+      JOIN clubs c ON c.id = n.club_id
+      JOIN users u ON u.id = n.user_id;
+    `);
+
+    db.exec(`
+      DROP TABLE collection_items;
+      DROP TABLE favorites;
+      DROP TABLE cookbook_access_grants;
+      DROP TABLE notifications;
+      DROP TABLE recipes;
+      DROP TABLE meetups;
+      DROP TABLE memberships;
+      DROP TABLE personal_collections;
+
+      ALTER TABLE memberships_new RENAME TO memberships;
+      ALTER TABLE meetups_new RENAME TO meetups;
+      ALTER TABLE recipes_new RENAME TO recipes;
+      ALTER TABLE favorites_new RENAME TO favorites;
+      ALTER TABLE personal_collections_new RENAME TO personal_collections;
+      ALTER TABLE collection_items_new RENAME TO collection_items;
+      ALTER TABLE cookbook_access_grants_new RENAME TO cookbook_access_grants;
+      ALTER TABLE notifications_new RENAME TO notifications;
+
+      CREATE INDEX IF NOT EXISTS idx_memberships_club ON memberships(club_id);
+      CREATE INDEX IF NOT EXISTS idx_meetups_club ON meetups(club_id);
+      CREATE INDEX IF NOT EXISTS idx_recipes_meetup ON recipes(meetup_id);
+      CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+      CREATE INDEX IF NOT EXISTS idx_notifications_due ON notifications(due_at, delivered_at);
+    `);
+
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON;");
+  }
+}
+
 function ensureSchema(db) {
   applyMigration1(db);
 
@@ -308,12 +498,17 @@ function ensureSchema(db) {
     applyMigration4(db);
     db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(4, new Date().toISOString());
   }
+  if (currentVersion < 5) {
+    applyMigration5(db);
+    db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(5, new Date().toISOString());
+  }
 }
 
 function openDb(filePath) {
   mkdirSync(dirname(filePath), { recursive: true });
   const db = new DatabaseSync(filePath);
   ensureSchema(db);
+  db.exec("PRAGMA foreign_keys = ON;");
   return db;
 }
 

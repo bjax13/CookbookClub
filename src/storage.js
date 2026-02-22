@@ -46,6 +46,10 @@ export function importStateFromFile(sourcePath) {
   if (!existsSync(absolute)) {
     throw new Error(`Import file not found: ${absolute}`);
   }
+  const verification = verifyStateSnapshotFile(sourcePath);
+  if (!verification.ok) {
+    throw new Error(`Invalid snapshot for import: ${verification.issues.join(" ")}`);
+  }
   return loadState(absolute);
 }
 

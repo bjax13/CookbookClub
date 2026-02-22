@@ -8,11 +8,15 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ### Added
 
-- (none)
+- Import guard now rejects invalid backup snapshots before write.
+- SQLite schema migration `v5` adds foreign-key enforcement.
+- CI/release workflows pin GitHub Actions by commit SHA.
 
 ### Changed
 
-- (none)
+- Branch protection now requires `test (24)`, `test (25)`, and `smoke`.
+- CI/smoke workflows explicitly use least-privilege `contents: read` permissions.
+- `.gitignore` now excludes generated SQLite and backup artifacts.
 
 ## [0.1.3] - 2026-02-22
 
