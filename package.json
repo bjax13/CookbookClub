@@ -1,0 +1,17 @@
+{
+  "name": "cookbook-club-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "CLI-first MVP for Cookbook Club",
+  "bin": {
+    "cookbook-club": "./src/cli.js"
+  },
+  "scripts": {
+    "start": "./scripts/with-dev-path.sh node ./src/cli.js",
+    "test": "./scripts/with-dev-path.sh node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
