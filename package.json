@@ -1,9 +1,17 @@
 {
   "name": "cookbook-club-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "CLI-first MVP for Cookbook Club",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bjax13/CookbookClub.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bjax13/CookbookClub/issues"
+  },
+  "homepage": "https://github.com/bjax13/CookbookClub#readme",
   "bin": {
     "cookbook-club": "./src/cli.js"
   },

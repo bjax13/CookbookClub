@@ -126,3 +126,4 @@ Manual testing docs:
 
 - License: `/Users/bryanjackson/Documents/code/CookbookClub/LICENSE` (MIT)
 - Changelog: `/Users/bryanjackson/Documents/code/CookbookClub/CHANGELOG.md`
+- Release process: `/Users/bryanjackson/Documents/code/CookbookClub/docs/release-process.md`
