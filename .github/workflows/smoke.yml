@@ -31,12 +31,19 @@ jobs:
         run: |
           mkdir -p ./tmp-smoke
           npm run start -- --data ./tmp-smoke/state.json club init --name "Smoke Club" --host-name "Alice"
+          npm run start -- --data ./tmp-smoke/state.json user add --name "Bob"
+          npm run start -- --data ./tmp-smoke/state.json member invite --actor user_1 --user user_2
           npm run start -- --data ./tmp-smoke/state.json meetup schedule --actor user_1 --at 2026-06-01T18:30:00.000Z
+          npm run start -- --data ./tmp-smoke/state.json recipe add --actor user_2 --title "Smoke Soup" --content "Test recipe." --image ./test/fixtures/test-recipe.jpg
+          npm run start -- --data ./tmp-smoke/state.json recipe list --actor user_1
+          npm run start -- --data ./tmp-smoke/state.json status
           npm run start -- --data ./tmp-smoke/state.json notify list --now 2026-06-01T18:30:00.000Z
           npm run start -- --data ./tmp-smoke/state.json data export --out ./tmp-smoke/backup.json
+          npm run start -- data verify-backup --in ./tmp-smoke/backup.json
 
       - name: SQLite storage smoke commands
         run: |
           npm run start -- --storage sqlite --data ./tmp-smoke/state.sqlite club init --name "Smoke SQLite Club" --host-name "Alice"
+          npm run start -- --storage sqlite --data ./tmp-smoke/state.sqlite status
           npm run start -- --storage sqlite --data ./tmp-smoke/state.sqlite data info
           npm run start -- --storage sqlite --data ./tmp-smoke/state.sqlite data doctor

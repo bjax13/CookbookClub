@@ -31,6 +31,45 @@ test("CLI version reports package version", () => {
   assert.equal(output.version, packageVersion);
 });
 
+test("CLI status reports uninitialized state", () => {
+  const dir = mkdtempSync(join(tmpdir(), "cookbook-cli-"));
+  const dataFile = join(dir, "empty.json");
+
+  const result = runCli(["--data", dataFile, "status"]);
+  assert.equal(result.status, 0);
+  const output = parseJsonStdout(result);
+  assert.equal(output.initialized, false);
+  assert.equal(output.storage, "json");
+});
+
+test("CLI status reports initialized club summary", () => {
+  const dir = mkdtempSync(join(tmpdir(), "cookbook-cli-"));
+  const dataFile = join(dir, "state.json");
+
+  let result = runCli(["--data", dataFile, "club", "init", "--name", "Cook Club", "--host-name", "Alice"]);
+  assert.equal(result.status, 0);
+
+  result = runCli([
+    "--data",
+    dataFile,
+    "meetup",
+    "schedule",
+    "--actor",
+    "user_1",
+    "--at",
+    "2026-04-03T18:30:00.000Z"
+  ]);
+  assert.equal(result.status, 0);
+
+  result = runCli(["--data", dataFile, "status"]);
+  assert.equal(result.status, 0);
+  const output = parseJsonStdout(result);
+  assert.equal(output.initialized, true);
+  assert.equal(output.club.name, "Cook Club");
+  assert.equal(output.host.id, "user_1");
+  assert.ok(output.counts.members >= 1);
+});
+
 test("CLI end-to-end happy path", () => {
   const dir = mkdtempSync(join(tmpdir(), "cookbook-cli-"));
   const dataFile = join(dir, "state.json");
@@ -174,6 +213,36 @@ test("CLI can export and import state snapshots", () => {
   const snapshot = parseJsonStdout(result);
   assert.equal(snapshot.club.name, "Cook Club");
   assert.equal(snapshot.host.name, "Alice");
+});
+
+test("CLI can verify backup snapshots", () => {
+  const dir = mkdtempSync(join(tmpdir(), "cookbook-cli-"));
+  const dataFile = join(dir, "state.json");
+  const backup = join(dir, "backup.json");
+
+  let result = runCli(["--data", dataFile, "club", "init", "--name", "Cook Club", "--host-name", "Alice"]);
+  assert.equal(result.status, 0);
+
+  result = runCli(["--data", dataFile, "data", "export", "--out", backup]);
+  assert.equal(result.status, 0);
+
+  result = runCli(["data", "verify-backup", "--in", backup], dir);
+  assert.equal(result.status, 0);
+  const verification = parseJsonStdout(result);
+  assert.equal(verification.ok, true);
+  assert.equal(verification.counts.clubs, 1);
+});
+
+test("CLI backup verification reports invalid snapshots", () => {
+  const dir = mkdtempSync(join(tmpdir(), "cookbook-cli-"));
+  const invalid = join(dir, "invalid.json");
+  writeFileSync(invalid, JSON.stringify({ clubs: "wrong-shape" }), "utf8");
+
+  const result = runCli(["data", "verify-backup", "--in", invalid], dir);
+  assert.equal(result.status, 0);
+  const verification = parseJsonStdout(result);
+  assert.equal(verification.ok, false);
+  assert.ok(verification.issues.some((issue) => issue.includes("must be an array")));
 });
 
 test("CLI supports sqlite storage backend", () => {

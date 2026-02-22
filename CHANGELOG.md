@@ -14,6 +14,19 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 - (none)
 
+## [0.1.3] - 2026-02-22
+
+### Added
+
+- `status` command for one-shot operational snapshot (club/meetup/counts/storage).
+- `data verify-backup --in <path>` for snapshot validation before import.
+- Deterministic smoke fixture file at `test/fixtures/test-recipe.jpg`.
+
+### Changed
+
+- Smoke workflow now exercises recipe and backup-verify commands.
+- CI matrix now runs automated tests on Node 24 and 25.
+
 ## [0.1.2] - 2026-02-22
 
 ### Added
