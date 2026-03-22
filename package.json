@@ -21,10 +21,26 @@
     "preinstall": "node ./scripts/check-node-version.js",
     "start": "./scripts/with-dev-path.sh node ./src/cli.js",
     "start:web": "./scripts/with-dev-path.sh node ./src/web.js",
+    "mobile:install": "./scripts/with-dev-path.sh npm --prefix ./apps/mobile install",
+    "start:mobile": "./scripts/with-dev-path.sh npm --prefix ./apps/mobile run start",
+    "mobile:typecheck": "./scripts/with-dev-path.sh npm --prefix ./apps/mobile run typecheck",
+    "format": "biome format --write .",
+    "lint": "biome lint .",
+    "check": "biome check --write .",
+    "ci": "biome ci .",
     "test": "./scripts/with-dev-path.sh node --test",
-    "release:tag": "./scripts/release-tag.sh"
+    "release:tag": "./scripts/release-tag.sh",
+    "prepare": "husky"
   },
   "engines": {
     "node": ">=24"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0"
+  },
+  "lint-staged": {
+    "*": "biome check --write --no-errors-on-unmatched --files-ignore-unknown=true"
   }
 }

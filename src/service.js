@@ -5,25 +5,28 @@ const ROLES = {
   HOST: "host",
   ADMIN: "admin",
   CO_ADMIN: "co_admin",
-  MEMBER: "member"
+  MEMBER: "member",
 };
 
 const CLUB_POLICY = {
   OPEN: "open",
-  CLOSED: "closed"
+  CLOSED: "closed",
 };
 
 const DEFAULT_REMINDER_POLICY = {
   meetupWindowHours: [168, 24, 3, 0],
-  recipePromptHours: 48
+  recipePromptHours: 48,
 };
 
 const REMINDER_TEMPLATES = {
   standard: { meetupWindowHours: [168, 24, 3, 0], recipePromptHours: 48 },
   light: { meetupWindowHours: [24, 2, 0], recipePromptHours: 24 },
   tight: { meetupWindowHours: [336, 168, 72, 24, 3, 1, 0], recipePromptHours: 72 },
-  same_day: { meetupWindowHours: [8, 3, 1, 0], recipePromptHours: 6 }
+  same_day: { meetupWindowHours: [8, 3, 1, 0], recipePromptHours: 6 },
 };
+
+const RECIPE_SCHEMA_TYPE = "Recipe";
+const RECIPE_SCHEMA_VERSION = 2;
 
 function isValidTemplateName(name) {
   return typeof name === "string" && /^[a-z0-9_]{2,40}$/.test(name);
@@ -52,6 +55,105 @@ function requireNonEmptyString(value, label) {
   return value.trim();
 }
 
+function normalizeOptionalString(value) {
+  if (value === undefined || value === null) return null;
+  const trimmed = String(value).trim();
+  return trimmed ? trimmed : null;
+}
+
+function normalizeTextList(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => (typeof item === "string" ? item.trim() : "")).filter(Boolean);
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    return trimmed
+      .split(/\r?\n|,/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function normalizeRecipeInstructions(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((step) => {
+        if (typeof step === "string") {
+          const text = step.trim();
+          return text ? { text } : null;
+        }
+        if (!step || typeof step !== "object") return null;
+        const text = normalizeOptionalString(step.text);
+        if (!text) return null;
+        const name = normalizeOptionalString(step.name);
+        return name ? { name, text } : { text };
+      })
+      .filter(Boolean);
+  }
+  if (typeof value === "string") {
+    return value
+      .split(/\r?\n/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((text) => ({ text }));
+  }
+  return [];
+}
+
+function normalizeOptionalDuration(value, label) {
+  const normalized = normalizeOptionalString(value);
+  if (!normalized) return null;
+  const match = normalized.match(/^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/);
+  const hasComponent = match?.slice(1).some((part) => part !== undefined);
+  if (!hasComponent) throw new Error(`${label} must be an ISO8601 duration like PT30M.`);
+  return normalized;
+}
+
+function deriveLegacyRecipeContent(recipe) {
+  const instructionText = normalizeRecipeInstructions(recipe.recipeInstructions)
+    .map((step) => step.text)
+    .join(" ");
+  return (
+    normalizeOptionalString(recipe.content) ||
+    normalizeOptionalString(recipe.description) ||
+    instructionText
+  );
+}
+
+function toCompatibleRecipe(recipe) {
+  const name =
+    normalizeOptionalString(recipe.name) || normalizeOptionalString(recipe.title) || null;
+  const description = normalizeOptionalString(recipe.description);
+  const ingredients = normalizeTextList(recipe.recipeIngredient);
+  const instructions = normalizeRecipeInstructions(recipe.recipeInstructions);
+  const firstImage =
+    (Array.isArray(recipe.image) && normalizeOptionalString(recipe.image[0])) ||
+    normalizeOptionalString(recipe.imagePath) ||
+    null;
+
+  return {
+    ...recipe,
+    schemaType: normalizeOptionalString(recipe.schemaType) || RECIPE_SCHEMA_TYPE,
+    schemaVersion: Number.isFinite(Number(recipe.schemaVersion))
+      ? Number(recipe.schemaVersion)
+      : RECIPE_SCHEMA_VERSION,
+    name,
+    title: normalizeOptionalString(recipe.title) || name,
+    description,
+    content: deriveLegacyRecipeContent(recipe),
+    image: Array.isArray(recipe.image)
+      ? recipe.image.filter((entry) => normalizeOptionalString(entry))
+      : firstImage
+        ? [firstImage]
+        : [],
+    imagePath: firstImage,
+    recipeIngredient: ingredients,
+    recipeInstructions: instructions,
+  };
+}
+
 function sanitizeReminderPolicy(policy) {
   const candidate = policy || {};
   const meetupWindowHours = Array.isArray(candidate.meetupWindowHours)
@@ -62,11 +164,13 @@ function sanitizeReminderPolicy(policy) {
   const dedupedSorted = [...new Set(meetupWindowHours)].sort((a, b) => b - a);
   const recipePromptHours = Number(candidate.recipePromptHours);
   return {
-    meetupWindowHours: dedupedSorted.length ? dedupedSorted : DEFAULT_REMINDER_POLICY.meetupWindowHours,
+    meetupWindowHours: dedupedSorted.length
+      ? dedupedSorted
+      : DEFAULT_REMINDER_POLICY.meetupWindowHours,
     recipePromptHours:
       Number.isFinite(recipePromptHours) && recipePromptHours >= 0
         ? recipePromptHours
-        : DEFAULT_REMINDER_POLICY.recipePromptHours
+        : DEFAULT_REMINDER_POLICY.recipePromptHours,
   };
 }
 
@@ -104,7 +208,9 @@ export class CookbookClubService {
   }
 
   userRole(clubId, userId) {
-    const membership = this.state.memberships.find((entry) => entry.clubId === clubId && entry.userId === userId);
+    const membership = this.state.memberships.find(
+      (entry) => entry.clubId === clubId && entry.userId === userId,
+    );
     return membership?.role || null;
   }
 
@@ -122,7 +228,8 @@ export class CookbookClubService {
 
   assertHost(actorUserId) {
     const club = this.requireClub();
-    if (club.hostUserId !== actorUserId) throw new Error("Only current host can perform this action.");
+    if (club.hostUserId !== actorUserId)
+      throw new Error("Only current host can perform this action.");
   }
 
   assertAdminOrCoAdmin(actorUserId) {
@@ -133,13 +240,16 @@ export class CookbookClubService {
   }
 
   assertMember(userId, clubId = this.requireClub().id) {
-    const membership = this.state.memberships.find((entry) => entry.clubId === clubId && entry.userId === userId);
+    const membership = this.state.memberships.find(
+      (entry) => entry.clubId === clubId && entry.userId === userId,
+    );
     if (!membership) throw new Error("User is not a member of this club.");
     return membership;
   }
 
   initClub({ clubName, hostName, hostEmail = null, hostPhone = null }) {
-    if (this.activeClub) throw new Error("Only single club is supported in MVP. Club already initialized.");
+    if (this.activeClub)
+      throw new Error("Only single club is supported in MVP. Club already initialized.");
     const normalizedClubName = requireNonEmptyString(clubName, "Club name");
     const normalizedHostName = requireNonEmptyString(hostName, "Host name");
 
@@ -152,7 +262,7 @@ export class CookbookClubService {
       name: normalizedHostName,
       email: hostEmail,
       phone: hostPhone,
-      createdAt: timestamp
+      createdAt: timestamp,
     };
 
     const club = {
@@ -162,7 +272,7 @@ export class CookbookClubService {
       membershipPolicy: CLUB_POLICY.CLOSED,
       reminderPolicy: sanitizeReminderPolicy(null),
       reminderTemplates: {},
-      createdAt: timestamp
+      createdAt: timestamp,
     };
 
     const membership = {
@@ -171,7 +281,7 @@ export class CookbookClubService {
       userId: hostUserId,
       role: ROLES.HOST,
       joinedAt: timestamp,
-      cookbookAccessFrom: null
+      cookbookAccessFrom: null,
     };
 
     this.state.users.push(host);
@@ -183,7 +293,7 @@ export class CookbookClubService {
       hostUserId,
       scheduledFor: null,
       theme: "TBD",
-      status: "upcoming"
+      status: "upcoming",
     });
 
     return { club, host };
@@ -196,7 +306,7 @@ export class CookbookClubService {
       name: normalizedName,
       email,
       phone,
-      createdAt: nowIso()
+      createdAt: nowIso(),
     };
     this.state.users.push(user);
     return user;
@@ -215,7 +325,9 @@ export class CookbookClubService {
       throw new Error("Use host transfer to assign host role.");
     }
 
-    const existing = this.state.memberships.find((entry) => entry.clubId === club.id && entry.userId === userId);
+    const existing = this.state.memberships.find(
+      (entry) => entry.clubId === club.id && entry.userId === userId,
+    );
     if (existing) return existing;
 
     const upcoming = this.getUpcomingMeetup();
@@ -225,7 +337,7 @@ export class CookbookClubService {
       userId,
       role,
       joinedAt: nowIso(),
-      cookbookAccessFrom: upcoming?.id || null
+      cookbookAccessFrom: upcoming?.id || null,
     };
     this.state.memberships.push(membership);
     if (upcoming?.scheduledFor) {
@@ -240,8 +352,38 @@ export class CookbookClubService {
       .filter((entry) => entry.clubId === club.id)
       .map((entry) => ({
         ...entry,
-        user: this.requireUser(entry.userId)
+        user: this.requireUser(entry.userId),
       }));
+  }
+
+  removeMember({ actorUserId, userId }) {
+    const club = this.requireClub();
+    this.assertAdminOrCoAdmin(actorUserId);
+    this.requireUser(userId);
+
+    if (club.hostUserId === userId) {
+      throw new Error("Cannot remove current host. Transfer host role first.");
+    }
+
+    const membershipIndex = this.state.memberships.findIndex(
+      (entry) => entry.clubId === club.id && entry.userId === userId,
+    );
+    if (membershipIndex < 0) {
+      throw new Error(`User is not a member of this club: ${userId}`);
+    }
+
+    const [removed] = this.state.memberships.splice(membershipIndex, 1);
+    this.state.cookbookAccessGrants = this.state.cookbookAccessGrants.filter(
+      (entry) => !(entry.clubId === club.id && entry.userId === userId),
+    );
+    this.state.notifications = this.state.notifications.filter(
+      (entry) => !(entry.clubId === club.id && entry.userId === userId),
+    );
+
+    return {
+      removedMembershipId: removed.id,
+      userId,
+    };
   }
 
   setRole({ actorUserId, userId, role }) {
@@ -295,7 +437,7 @@ export class CookbookClubService {
     const club = this.requireClub();
     club.reminderPolicy = sanitizeReminderPolicy({
       meetupWindowHours,
-      recipePromptHours
+      recipePromptHours,
     });
     return club.reminderPolicy;
   }
@@ -305,12 +447,12 @@ export class CookbookClubService {
     const builtIn = Object.entries(REMINDER_TEMPLATES).map(([name, policy]) => ({
       name,
       source: "builtin",
-      policy: sanitizeReminderPolicy(policy)
+      policy: sanitizeReminderPolicy(policy),
     }));
     const custom = Object.entries(club.reminderTemplates || {}).map(([name, policy]) => ({
       name,
       source: "custom",
-      policy: sanitizeReminderPolicy(policy)
+      policy: sanitizeReminderPolicy(policy),
     }));
     return [...builtIn, ...custom];
   }
@@ -318,7 +460,9 @@ export class CookbookClubService {
   addReminderTemplate({ actorUserId, name, meetupWindowHours, recipePromptHours }) {
     this.assertHost(actorUserId);
     if (!isValidTemplateName(name)) {
-      throw new Error("Invalid template name. Use 2-40 chars: lowercase letters, numbers, underscore.");
+      throw new Error(
+        "Invalid template name. Use 2-40 chars: lowercase letters, numbers, underscore.",
+      );
     }
     if (REMINDER_TEMPLATES[name]) {
       throw new Error("Cannot overwrite built-in reminder template.");
@@ -329,7 +473,7 @@ export class CookbookClubService {
     return {
       name,
       source: "custom",
-      policy
+      policy,
     };
   }
 
@@ -352,7 +496,7 @@ export class CookbookClubService {
     return {
       template: templateName,
       source: club.reminderTemplates[templateName] ? "custom" : "builtin",
-      policy: club.reminderPolicy
+      policy: club.reminderPolicy,
     };
   }
 
@@ -369,7 +513,9 @@ export class CookbookClubService {
     }
     const normalizedPrefix = String(prefix || "").trim();
     if (normalizedPrefix && !/^[a-z0-9_]{1,20}$/.test(normalizedPrefix)) {
-      throw new Error("Invalid template prefix. Use 1-20 chars: lowercase letters, numbers, underscore.");
+      throw new Error(
+        "Invalid template prefix. Use 1-20 chars: lowercase letters, numbers, underscore.",
+      );
     }
 
     const club = this.requireClub();
@@ -401,7 +547,7 @@ export class CookbookClubService {
       imported,
       skipped,
       overwrite: Boolean(overwrite),
-      prefix: normalizedPrefix || null
+      prefix: normalizedPrefix || null,
     };
   }
 
@@ -413,7 +559,7 @@ export class CookbookClubService {
       scheduledFor,
       theme,
       status,
-      createdAt: nowIso()
+      createdAt: nowIso(),
     };
     this.state.meetups.push(meetup);
     return meetup;
@@ -422,13 +568,16 @@ export class CookbookClubService {
   getUpcomingMeetup() {
     const club = this.requireClub();
     return (
-      this.state.meetups.find((entry) => entry.clubId === club.id && entry.status === "upcoming") || null
+      this.state.meetups.find((entry) => entry.clubId === club.id && entry.status === "upcoming") ||
+      null
     );
   }
 
   getPastMeetups() {
     const club = this.requireClub();
-    return this.state.meetups.filter((entry) => entry.clubId === club.id && entry.status === "past");
+    return this.state.meetups.filter(
+      (entry) => entry.clubId === club.id && entry.status === "past",
+    );
   }
 
   listMeetups() {
@@ -439,7 +588,7 @@ export class CookbookClubService {
       .sort((a, b) => idSequence(a.id) - idSequence(b.id))
       .map((meetup) => ({
         ...meetup,
-        host: this.requireUser(meetup.hostUserId)
+        host: this.requireUser(meetup.hostUserId),
       }));
   }
 
@@ -449,7 +598,7 @@ export class CookbookClubService {
     if (!meetup || meetup.clubId !== club.id) throw new Error(`Unknown meetup: ${meetupId}`);
     return {
       ...meetup,
-      host: this.requireUser(meetup.hostUserId)
+      host: this.requireUser(meetup.hostUserId),
     };
   }
 
@@ -461,7 +610,7 @@ export class CookbookClubService {
     this.scheduleMeetupReminders(upcoming);
     this.queueReminder("meetup_updated", {
       meetupId: upcoming.id,
-      message: `Meetup scheduled for ${upcoming.scheduledFor}. Theme: ${upcoming.theme}`
+      message: `Meetup scheduled for ${upcoming.scheduledFor}. Theme: ${upcoming.theme}`,
     });
 
     return upcoming;
@@ -475,7 +624,7 @@ export class CookbookClubService {
     this.scheduleMeetupReminders(upcoming);
     this.queueReminder("meetup_updated", {
       meetupId: upcoming.id,
-      message: `Theme updated: ${theme}`
+      message: `Theme updated: ${theme}`,
     });
     return upcoming;
   }
@@ -492,7 +641,7 @@ export class CookbookClubService {
       hostUserId: club.hostUserId,
       scheduledFor: null,
       theme: "TBD",
-      status: "upcoming"
+      status: "upcoming",
     });
     return { past: upcoming, next };
   }
@@ -500,8 +649,15 @@ export class CookbookClubService {
   queueReminder(type, payload, options = {}) {
     const { dueAt = nowIso(), userIds = null, key = null } = options;
     const club = this.requireClub();
-    const memberIds = userIds || this.state.memberships.filter((entry) => entry.clubId === club.id).map((entry) => entry.userId);
-    const uniqueUserIds = dedupeBy(memberIds.map((id) => ({ id })), (v) => v.id).map((v) => v.id);
+    const memberIds =
+      userIds ||
+      this.state.memberships
+        .filter((entry) => entry.clubId === club.id)
+        .map((entry) => entry.userId);
+    const uniqueUserIds = dedupeBy(
+      memberIds.map((id) => ({ id })),
+      (v) => v.id,
+    ).map((v) => v.id);
 
     for (const userId of uniqueUserIds) {
       const duplicate = this.state.notifications.find(
@@ -510,7 +666,7 @@ export class CookbookClubService {
           entry.userId === userId &&
           entry.type === type &&
           entry.key === key &&
-          entry.payload?.meetupId === payload?.meetupId
+          entry.payload?.meetupId === payload?.meetupId,
       );
       if (duplicate) {
         duplicate.payload = payload;
@@ -527,7 +683,7 @@ export class CookbookClubService {
         payload,
         dueAt,
         createdAt: nowIso(),
-        deliveredAt: null
+        deliveredAt: null,
       });
     }
   }
@@ -546,13 +702,13 @@ export class CookbookClubService {
       message:
         hours === 0
           ? `Meetup starting now. Theme: ${meetup.theme}`
-          : `Reminder: meetup in ${hours} hour(s) (${meetup.scheduledFor})`
+          : `Reminder: meetup in ${hours} hour(s) (${meetup.scheduledFor})`,
     }));
     targets.push({
       type: "recipe_prompt",
       key: "recipe_prompt",
       offsetMs: policy.recipePromptHours * 60 * 60 * 1000,
-      message: `Prompt: add your recipe and image for theme "${meetup.theme}".`
+      message: `Prompt: add your recipe and image for theme "${meetup.theme}".`,
     });
 
     for (const target of targets) {
@@ -561,13 +717,13 @@ export class CookbookClubService {
         target.type,
         {
           meetupId: meetup.id,
-          message: target.message
+          message: target.message,
         },
         {
           dueAt: clampDueAt(dueAtIso, now),
           userIds: specificUserIds,
-          key: target.key
-        }
+          key: target.key,
+        },
       );
     }
   }
@@ -584,7 +740,7 @@ export class CookbookClubService {
     }
     return pending.map((entry) => ({
       ...entry,
-      user: this.requireUser(entry.userId)
+      user: this.requireUser(entry.userId),
     }));
   }
 
@@ -592,7 +748,9 @@ export class CookbookClubService {
     let pending = this.state.notifications.filter((entry) => !entry.deliveredAt);
     if (now) {
       const nowIsoValue = toValidIso(now, "Invalid notification timestamp. Use ISO format.");
-      pending = pending.filter((entry) => !entry.dueAt || Date.parse(entry.dueAt) <= Date.parse(nowIsoValue));
+      pending = pending.filter(
+        (entry) => !entry.dueAt || Date.parse(entry.dueAt) <= Date.parse(nowIsoValue),
+      );
     }
     if (userId) {
       this.requireUser(userId);
@@ -600,7 +758,7 @@ export class CookbookClubService {
     }
     return pending.map((entry) => ({
       ...entry,
-      user: this.requireUser(entry.userId)
+      user: this.requireUser(entry.userId),
     }));
   }
 
@@ -613,17 +771,42 @@ export class CookbookClubService {
     if (idSequence(meetup.id) >= idSequence(membership.cookbookAccessFrom)) return true;
 
     return this.state.cookbookAccessGrants.some(
-      (entry) => entry.userId === userId && entry.meetupId === meetupId
+      (entry) => entry.userId === userId && entry.meetupId === meetupId,
     );
   }
 
-  addRecipe({ actorUserId, title, content, imagePath }) {
+  addRecipe(input) {
+    const actorUserId = input?.actorUserId;
     const upcoming = this.getUpcomingMeetup();
     if (!upcoming) throw new Error("No upcoming meetup.");
     this.assertMember(actorUserId);
-    const normalizedTitle = requireNonEmptyString(title, "Recipe title");
-    const normalizedContent = requireNonEmptyString(content, "Recipe content");
-    const normalizedImagePath = requireNonEmptyString(imagePath, "Recipe image path");
+
+    const normalizedName = requireNonEmptyString(input?.name ?? input?.title, "Recipe name");
+    const description = normalizeOptionalString(input?.description ?? input?.content);
+    const images = [
+      ...normalizeTextList(input?.image),
+      ...normalizeTextList(input?.images),
+      ...normalizeTextList(input?.imagePath),
+    ];
+    const normalizedImagePath = requireNonEmptyString(images[0], "Recipe image path");
+
+    const normalizedIngredients = normalizeTextList(input?.recipeIngredient ?? input?.ingredients);
+    const fallbackIngredients =
+      normalizedIngredients.length || !description ? normalizedIngredients : [description];
+    if (!fallbackIngredients.length) {
+      throw new Error("Recipe ingredients are required.");
+    }
+
+    const normalizedInstructions = normalizeRecipeInstructions(
+      input?.recipeInstructions ?? input?.instructions,
+    );
+    const fallbackInstructions =
+      normalizedInstructions.length || !description
+        ? normalizedInstructions
+        : [{ text: description }];
+    if (!fallbackInstructions.length) {
+      throw new Error("Recipe instructions are required.");
+    }
 
     if (!existsSync(normalizedImagePath)) {
       throw new Error(`Image path not found: ${normalizedImagePath}`);
@@ -634,13 +817,29 @@ export class CookbookClubService {
       clubId: upcoming.clubId,
       meetupId: upcoming.id,
       authorUserId: actorUserId,
-      title: normalizedTitle,
-      content: normalizedContent,
+      schemaType: RECIPE_SCHEMA_TYPE,
+      schemaVersion: RECIPE_SCHEMA_VERSION,
+      name: normalizedName,
+      description,
+      image: images.length ? images : [normalizedImagePath],
+      recipeIngredient: fallbackIngredients,
+      recipeInstructions: fallbackInstructions,
+      prepTime: normalizeOptionalDuration(input?.prepTime, "prepTime"),
+      cookTime: normalizeOptionalDuration(input?.cookTime, "cookTime"),
+      totalTime: normalizeOptionalDuration(input?.totalTime, "totalTime"),
+      recipeYield: normalizeOptionalString(input?.recipeYield),
+      recipeCategory: normalizeOptionalString(input?.recipeCategory),
+      recipeCuisine: normalizeOptionalString(input?.recipeCuisine),
+      keywords: normalizeTextList(input?.keywords),
+      nutrition:
+        input?.nutrition && typeof input.nutrition === "object" ? { ...input.nutrition } : null,
+      title: normalizedName,
+      content: description || fallbackInstructions.map((step) => step.text).join(" "),
       imagePath: normalizedImagePath,
-      createdAt: nowIso()
+      createdAt: nowIso(),
     };
     this.state.recipes.push(recipe);
-    return recipe;
+    return toCompatibleRecipe(recipe);
   }
 
   listMeetupRecipes({ actorUserId, meetupId = null }) {
@@ -653,7 +852,10 @@ export class CookbookClubService {
 
     return this.state.recipes
       .filter((entry) => entry.meetupId === id)
-      .map((entry) => ({ ...entry, author: this.requireUser(entry.authorUserId) }));
+      .map((entry) => ({
+        ...toCompatibleRecipe(entry),
+        author: this.requireUser(entry.authorUserId),
+      }));
   }
 
   favoriteRecipe({ actorUserId, recipeId }) {
@@ -664,27 +866,58 @@ export class CookbookClubService {
       throw new Error("You cannot favorite recipes you cannot view.");
     }
 
-    const existing = this.state.favorites.find((entry) => entry.userId === actorUserId && entry.recipeId === recipeId);
+    const existing = this.state.favorites.find(
+      (entry) => entry.userId === actorUserId && entry.recipeId === recipeId,
+    );
     if (existing) return existing;
 
     const favorite = {
       id: nextId(this.state, "favorite"),
       userId: actorUserId,
       recipeId,
-      createdAt: nowIso()
+      createdAt: nowIso(),
     };
     this.state.favorites.push(favorite);
     return favorite;
   }
 
+  purgeRecipes({ actorUserId, mode = "all" }) {
+    this.assertAdminOrCoAdmin(actorUserId);
+    const club = this.requireClub();
+    if (mode !== "all") {
+      throw new Error("Invalid purge mode. Use `all`.");
+    }
+
+    const clubRecipes = this.state.recipes.filter((entry) => entry.clubId === club.id);
+    const toRemove = clubRecipes;
+    if (!toRemove.length) {
+      return { removedCount: 0, mode, removedRecipeIds: [] };
+    }
+
+    const removeIds = new Set(toRemove.map((entry) => entry.id));
+    this.state.recipes = this.state.recipes.filter((entry) => !removeIds.has(entry.id));
+    this.state.favorites = this.state.favorites.filter((entry) => !removeIds.has(entry.recipeId));
+    this.state.collectionItems = this.state.collectionItems.filter(
+      (entry) => !removeIds.has(entry.recipeId),
+    );
+
+    return {
+      removedCount: toRemove.length,
+      mode,
+      removedRecipeIds: toRemove.map((entry) => entry.id),
+    };
+  }
+
   ensurePersonalCollection({ actorUserId, name }) {
-    const existing = this.state.personalCollections.find((entry) => entry.userId === actorUserId && entry.name === name);
+    const existing = this.state.personalCollections.find(
+      (entry) => entry.userId === actorUserId && entry.name === name,
+    );
     if (existing) return existing;
     const collection = {
       id: nextId(this.state, "collection"),
       userId: actorUserId,
       name,
-      createdAt: nowIso()
+      createdAt: nowIso(),
     };
     this.state.personalCollections.push(collection);
     return collection;
@@ -694,7 +927,7 @@ export class CookbookClubService {
     const favorite = this.favoriteRecipe({ actorUserId, recipeId });
     const collection = this.ensurePersonalCollection({ actorUserId, name: collectionName });
     const exists = this.state.collectionItems.find(
-      (entry) => entry.collectionId === collection.id && entry.recipeId === favorite.recipeId
+      (entry) => entry.collectionId === collection.id && entry.recipeId === favorite.recipeId,
     );
     if (exists) return exists;
 
@@ -702,7 +935,7 @@ export class CookbookClubService {
       id: nextId(this.state, "collectionItem"),
       collectionId: collection.id,
       recipeId: favorite.recipeId,
-      createdAt: nowIso()
+      createdAt: nowIso(),
     };
     this.state.collectionItems.push(item);
     return item;
@@ -710,13 +943,15 @@ export class CookbookClubService {
 
   listPersonalCollections({ actorUserId }) {
     this.assertMember(actorUserId);
-    const collections = this.state.personalCollections.filter((entry) => entry.userId === actorUserId);
+    const collections = this.state.personalCollections.filter(
+      (entry) => entry.userId === actorUserId,
+    );
     return collections.map((collection) => ({
       ...collection,
       recipes: this.state.collectionItems
         .filter((entry) => entry.collectionId === collection.id)
         .map((entry) => this.state.recipes.find((recipe) => recipe.id === entry.recipeId))
-        .filter(Boolean)
+        .filter(Boolean),
     }));
   }
 
@@ -732,12 +967,14 @@ export class CookbookClubService {
 
     const targets = all
       ? pastMeetups
-      : pastMeetups.filter((entry) => (fromMeetupId ? idSequence(entry.id) >= idSequence(fromMeetupId) : true));
+      : pastMeetups.filter((entry) =>
+          fromMeetupId ? idSequence(entry.id) >= idSequence(fromMeetupId) : true,
+        );
 
     const grants = [];
     for (const meetup of targets) {
       const existing = this.state.cookbookAccessGrants.find(
-        (entry) => entry.userId === targetUserId && entry.meetupId === meetup.id
+        (entry) => entry.userId === targetUserId && entry.meetupId === meetup.id,
       );
       if (existing) continue;
       const grant = {
@@ -746,7 +983,7 @@ export class CookbookClubService {
         userId: targetUserId,
         meetupId: meetup.id,
         grantedByUserId: actorUserId,
-        createdAt: nowIso()
+        createdAt: nowIso(),
       };
       this.state.cookbookAccessGrants.push(grant);
       grants.push(grant);
@@ -762,4 +999,4 @@ export class CookbookClubService {
   }
 }
 
-export { ROLES, CLUB_POLICY, REMINDER_TEMPLATES };
+export { CLUB_POLICY, REMINDER_TEMPLATES, ROLES };

@@ -3,15 +3,15 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CookbookClubService } from "./service.js";
+import { getSqliteStorageInfo, repairSqliteStorage, runSqliteDoctor } from "./sqlite-storage.js";
 import {
   exportStateToFile,
   importStateFromFile,
   loadState,
   resolveDataFile,
   saveState,
-  verifyStateSnapshotFile
+  verifyStateSnapshotFile,
 } from "./storage.js";
-import { getSqliteStorageInfo, repairSqliteStorage, runSqliteDoctor } from "./sqlite-storage.js";
 
 function parseArgs(argv) {
   const tokens = [...argv];
@@ -87,6 +87,23 @@ function parseOptionalNonNegativeNumber(value, fieldName) {
   return parsed;
 }
 
+function parseOptionalList(value) {
+  if (value === undefined || value === null) return undefined;
+  const text = String(value).trim();
+  if (!text) return [];
+  if (text.startsWith("[") || text.startsWith("{")) {
+    const parsed = JSON.parse(text);
+    if (!Array.isArray(parsed)) {
+      throw new Error("Expected a JSON array.");
+    }
+    return parsed;
+  }
+  return text
+    .split("|")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 function readJsonFile(path, fieldLabel) {
   const absolute = resolve(process.cwd(), path);
   const raw = readFileSync(absolute, "utf8").trim();
@@ -144,7 +161,7 @@ Commands:
   meetup schedule --actor <userId> --at <ISO datetime>
   meetup set-theme --actor <userId> --theme <text>
   meetup advance --actor <userId>
-  recipe add --actor <userId> --title <title> --content <text> --image <path>
+  recipe add --actor <userId> --title <title> --content <text> --image <path> [--name <text>] [--description <text>] [--ingredients <text|json>] [--instructions <text|json>] [--prep-time <ISO8601>] [--cook-time <ISO8601>] [--total-time <ISO8601>] [--yield <text>] [--category <text>] [--cuisine <text>] [--keywords <text|json>] [--images <text|json>]
   recipe list --actor <userId> [--meetup <meetupId>]
   recipe favorite --actor <userId> --recipe <recipeId>
   cookbook personal-add --actor <userId> --recipe <recipeId> --collection <name>
@@ -171,13 +188,13 @@ function formatClubSnapshot(snapshot) {
       id: club.id,
       name: club.name,
       membershipPolicy: club.membershipPolicy,
-      reminderPolicy: club.reminderPolicy
+      reminderPolicy: club.reminderPolicy,
     },
     host: {
       id: host.id,
-      name: host.name
+      name: host.name,
     },
-    upcomingMeetup: upcoming
+    upcomingMeetup: upcoming,
   };
 }
 
@@ -190,8 +207,8 @@ function buildStatus({ state, service, storage, filePath }) {
       dataFile: filePath,
       counts: {
         users: state.users.length,
-        pendingNotifications
-      }
+        pendingNotifications,
+      },
     };
   }
 
@@ -208,26 +225,26 @@ function buildStatus({ state, service, storage, filePath }) {
     club: {
       id: club.id,
       name: club.name,
-      membershipPolicy: club.membershipPolicy
+      membershipPolicy: club.membershipPolicy,
     },
     host: {
       id: host.id,
-      name: host.name
+      name: host.name,
     },
     upcomingMeetup: upcoming
       ? {
           id: upcoming.id,
           scheduledFor: upcoming.scheduledFor,
           theme: upcoming.theme,
-          status: upcoming.status
+          status: upcoming.status,
         }
       : null,
     counts: {
       members: memberCount,
       recipes: clubRecipeCount,
       upcomingMeetupRecipes: upcomingRecipeCount,
-      pendingNotifications
-    }
+      pendingNotifications,
+    },
   };
 }
 
@@ -248,7 +265,7 @@ function main() {
     "data:doctor",
     "data:import",
     "data:verify-backup",
-    "version:"
+    "version:",
   ]);
   const state = stateFreeCommands.has(commandKey) ? null : loadState(filePath, storage);
   const service = state ? new CookbookClubService(state) : null;
@@ -264,7 +281,7 @@ function main() {
     case "version:":
       shouldSave = false;
       output = {
-        version: cliVersion()
+        version: cliVersion(),
       };
       break;
     case "status:":
@@ -272,7 +289,7 @@ function main() {
         state,
         service,
         storage,
-        filePath
+        filePath,
       });
       break;
     case "club:init":
@@ -280,7 +297,7 @@ function main() {
         clubName: required(args.options, "name"),
         hostName: required(args.options, "host-name"),
         hostEmail: args.options["host-email"] || null,
-        hostPhone: args.options["host-phone"] || null
+        hostPhone: args.options["host-phone"] || null,
       });
       break;
     case "club:show":
@@ -289,17 +306,19 @@ function main() {
     case "club:set-policy":
       output = service.setPolicy({
         actorUserId: required(args.options, "actor"),
-        policy: required(args.options, "policy")
+        policy: required(args.options, "policy"),
       });
       break;
     case "club:set-reminders":
       output = service.setReminderPolicy({
         actorUserId: required(args.options, "actor"),
-        meetupWindowHours: args.options.windows ? parseCsvNumberList(args.options.windows) : undefined,
+        meetupWindowHours: args.options.windows
+          ? parseCsvNumberList(args.options.windows)
+          : undefined,
         recipePromptHours: parseOptionalNonNegativeNumber(
           args.options["recipe-prompt-hours"],
-          "recipe-prompt-hours"
-        )
+          "recipe-prompt-hours",
+        ),
       });
       break;
     case "club:reminder-templates":
@@ -308,7 +327,7 @@ function main() {
     case "club:set-reminder-template":
       output = service.applyReminderTemplate({
         actorUserId: required(args.options, "actor"),
-        templateName: required(args.options, "template")
+        templateName: required(args.options, "template"),
       });
       break;
     case "club:add-reminder-template":
@@ -318,14 +337,14 @@ function main() {
         meetupWindowHours: parseCsvNumberList(required(args.options, "windows")),
         recipePromptHours: parseOptionalNonNegativeNumber(
           args.options["recipe-prompt-hours"],
-          "recipe-prompt-hours"
-        )
+          "recipe-prompt-hours",
+        ),
       });
       break;
     case "club:remove-reminder-template":
       output = service.removeReminderTemplate({
         actorUserId: required(args.options, "actor"),
-        name: required(args.options, "name")
+        name: required(args.options, "name"),
       });
       break;
     case "club:export-reminder-templates": {
@@ -333,11 +352,11 @@ function main() {
       const exportedTo = writeJsonFile(required(args.options, "out"), {
         version: 1,
         exportedAt: new Date().toISOString(),
-        templates
+        templates,
       });
       output = {
         exportedTo,
-        templateCount: Object.keys(templates).length
+        templateCount: Object.keys(templates).length,
       };
       break;
     }
@@ -347,11 +366,11 @@ function main() {
         actorUserId: required(args.options, "actor"),
         templates: data?.templates ?? data,
         overwrite: Boolean(args.options.overwrite),
-        prefix: args.options.prefix || ""
+        prefix: args.options.prefix || "",
       });
       output = {
         importedFrom: absolute,
-        ...result
+        ...result,
       };
       break;
     }
@@ -359,7 +378,7 @@ function main() {
       output = service.createUser({
         name: required(args.options, "name"),
         email: args.options.email || null,
-        phone: args.options.phone || null
+        phone: args.options.phone || null,
       });
       break;
     case "user:list":
@@ -369,7 +388,7 @@ function main() {
       output = service.inviteMember({
         actorUserId: required(args.options, "actor"),
         userId: required(args.options, "user"),
-        role: args.options.role || "member"
+        role: args.options.role || "member",
       });
       break;
     case "member:list":
@@ -379,7 +398,7 @@ function main() {
       output = service.setRole({
         actorUserId: required(args.options, "actor"),
         userId: required(args.options, "user"),
-        role: required(args.options, "role")
+        role: required(args.options, "role"),
       });
       break;
     case "host:show":
@@ -388,11 +407,13 @@ function main() {
     case "host:set":
       output = service.setHost({
         actorUserId: required(args.options, "actor"),
-        newHostUserId: required(args.options, "user")
+        newHostUserId: required(args.options, "user"),
       });
       break;
     case "meetup:show":
-      output = args.options.id ? service.getMeetupById(args.options.id) : service.getUpcomingMeetup();
+      output = args.options.id
+        ? service.getMeetupById(args.options.id)
+        : service.getUpcomingMeetup();
       break;
     case "meetup:list":
       output = service.listMeetups();
@@ -400,13 +421,13 @@ function main() {
     case "meetup:schedule":
       output = service.scheduleUpcomingMeetup({
         actorUserId: required(args.options, "actor"),
-        isoDateTime: required(args.options, "at")
+        isoDateTime: required(args.options, "at"),
       });
       break;
     case "meetup:set-theme":
       output = service.setMeetupTheme({
         actorUserId: required(args.options, "actor"),
-        theme: required(args.options, "theme")
+        theme: required(args.options, "theme"),
       });
       break;
     case "meetup:advance":
@@ -415,33 +436,45 @@ function main() {
     case "recipe:add":
       output = service.addRecipe({
         actorUserId: required(args.options, "actor"),
-        title: required(args.options, "title"),
-        content: required(args.options, "content"),
-        imagePath: resolve(process.cwd(), required(args.options, "image"))
+        title: args.options.title || args.options.name || "",
+        name: args.options.name || args.options.title || "",
+        content: args.options.content || args.options.description || "",
+        description: args.options.description || args.options.content || "",
+        imagePath: resolve(process.cwd(), required(args.options, "image")),
+        image: parseOptionalList(args.options.images),
+        recipeIngredient: parseOptionalList(args.options.ingredients),
+        recipeInstructions: parseOptionalList(args.options.instructions),
+        prepTime: args.options["prep-time"],
+        cookTime: args.options["cook-time"],
+        totalTime: args.options["total-time"],
+        recipeYield: args.options.yield,
+        recipeCategory: args.options.category,
+        recipeCuisine: args.options.cuisine,
+        keywords: parseOptionalList(args.options.keywords),
       });
       break;
     case "recipe:list":
       output = service.listMeetupRecipes({
         actorUserId: required(args.options, "actor"),
-        meetupId: args.options.meetup || null
+        meetupId: args.options.meetup || null,
       });
       break;
     case "recipe:favorite":
       output = service.favoriteRecipe({
         actorUserId: required(args.options, "actor"),
-        recipeId: required(args.options, "recipe")
+        recipeId: required(args.options, "recipe"),
       });
       break;
     case "cookbook:personal-add":
       output = service.addFavoriteToCollection({
         actorUserId: required(args.options, "actor"),
         recipeId: required(args.options, "recipe"),
-        collectionName: required(args.options, "collection")
+        collectionName: required(args.options, "collection"),
       });
       break;
     case "cookbook:personal-list":
       output = service.listPersonalCollections({
-        actorUserId: required(args.options, "actor")
+        actorUserId: required(args.options, "actor"),
       });
       break;
     case "access:grant-past":
@@ -449,12 +482,12 @@ function main() {
         actorUserId: required(args.options, "actor"),
         targetUserId: required(args.options, "user"),
         fromMeetupId: args.options["from-meetup"] || null,
-        all: Boolean(args.options.all)
+        all: Boolean(args.options.all),
       });
       break;
     case "data:export":
       output = {
-        exportedTo: exportStateToFile(required(args.options, "out"), state)
+        exportedTo: exportStateToFile(required(args.options, "out"), state),
       };
       break;
     case "data:import": {
@@ -463,7 +496,7 @@ function main() {
       saveState(filePath, imported, storage);
       output = {
         importedFrom: resolve(process.cwd(), sourcePath),
-        activeDataFile: filePath
+        activeDataFile: filePath,
       };
       shouldSave = false;
       break;
@@ -479,7 +512,7 @@ function main() {
           : {
               filePath,
               storage,
-              note: "Detailed table stats are only available for --storage sqlite."
+              note: "Detailed table stats are only available for --storage sqlite.",
             };
       break;
     case "data:doctor":
@@ -491,18 +524,18 @@ function main() {
           : {
               filePath,
               storage,
-              note: "`data doctor` is only available for --storage sqlite."
+              note: "`data doctor` is only available for --storage sqlite.",
             };
       break;
     case "notify:list":
       output = service.listPendingNotifications({
         now: args.options.now || null,
-        userId: args.options.user || null
+        userId: args.options.user || null,
       });
       break;
     case "notify:run":
       output = service.runNotifications({
-        now: args.options.now || new Date().toISOString()
+        now: args.options.now || new Date().toISOString(),
       });
       break;
     default:

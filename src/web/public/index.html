@@ -11,71 +11,216 @@
       <header class="hero">
         <p class="eyebrow">Cookbook Club</p>
         <h1>Web MVP Control Panel</h1>
-        <p class="subtitle">Thin UI layer over existing CLI service logic.</p>
-        <button id="refresh" type="button">Refresh Status</button>
+        <p class="subtitle">Member-friendly web flow over the existing service API.</p>
+        <div class="hero-actions">
+          <label class="inline-label">
+            Active user
+            <select id="activeUserSelect"></select>
+          </label>
+          <span id="activeRoleBadge" class="role-badge">No role</span>
+          <button id="refresh" type="button">Refresh</button>
+        </div>
       </header>
 
-      <section class="card">
-        <h2>Status</h2>
-        <pre id="statusView">Loading...</pre>
-      </section>
+      <nav class="tabs" aria-label="Primary">
+        <button class="tab is-active" data-route="dashboard" type="button">Dashboard</button>
+        <button class="tab" data-route="meetup" type="button">Meetup</button>
+        <button class="tab" data-route="recipes" type="button">Recipes</button>
+        <button class="tab" data-route="members" type="button">Members</button>
+        <button class="tab" data-route="cookbook" type="button">My Cookbook</button>
+        <button class="tab" data-route="settings" type="button">Settings</button>
+      </nav>
+      <div id="flashMessage" class="flash" aria-live="polite"></div>
 
-      <section class="card grid">
-        <div>
+      <section id="route-dashboard" class="route is-active">
+        <div class="grid">
+          <article class="card">
+            <h2>Club</h2>
+            <p id="dashboardClub">Not initialized.</p>
+          </article>
+          <article class="card">
+            <h2>Upcoming Meetup</h2>
+            <p id="dashboardMeetup">No upcoming meetup.</p>
+          </article>
+          <article class="card">
+            <h2>Recipe Progress</h2>
+            <p id="dashboardRecipes">No recipes yet.</p>
+          </article>
+        </div>
+        <section class="card">
           <h2>Initialize Club</h2>
-          <form id="initClubForm">
+          <p class="hint">Start your club first, then invite members and schedule your first meetup.</p>
+          <form id="initClubForm" class="compact-form">
             <label>Club name <input name="clubName" value="Cook Book Club" required /></label>
             <label>Host name <input name="hostName" value="Alice" required /></label>
-            <button type="submit">Initialize</button>
+            <button type="submit">Initialize Club</button>
           </form>
-        </div>
+          <h3>Onboarding Checklist</h3>
+          <ul id="onboardingChecklist" class="checklist"></ul>
+        </section>
+      </section>
 
-        <div>
-          <h2>Add Member</h2>
-          <form id="addMemberForm">
-            <label>User name <input name="name" value="Bob" required /></label>
-            <button type="submit">Create User + Invite</button>
+      <section id="route-meetup" class="route">
+        <div class="card">
+          <h2>Schedule Meetup</h2>
+          <form id="scheduleForm" class="compact-form action-host-only">
+            <label>Meetup date and time
+              <input name="isoDateTime" type="datetime-local" required />
+            </label>
+            <button type="submit">Schedule</button>
           </form>
-          <p class="hint">Invites as actor <code>user_1</code>.</p>
+          <p class="hint">Host only. Time uses your local timezone.</p>
+        </div>
+        <div class="card action-host-only">
+          <h2>Transfer Host</h2>
+          <form id="setHostForm" class="compact-form">
+            <label>New host
+              <select id="newHostUserSelect" name="newHostUserId" required></select>
+            </label>
+            <button type="submit">Transfer Host</button>
+          </form>
         </div>
       </section>
 
-      <section class="card grid">
-        <div>
-          <h2>Schedule Meetup</h2>
-          <form id="scheduleForm">
-            <label>Actor user ID <input name="actorUserId" value="user_1" required /></label>
-            <label>ISO datetime <input name="isoDateTime" value="2026-06-01T18:30:00.000Z" required /></label>
-            <button type="submit">Schedule</button>
-          </form>
-        </div>
-
-        <div>
-          <h2>Add Recipe</h2>
+      <section id="route-recipes" class="route">
+        <div class="card">
+          <h2>Submit Recipe</h2>
+          <p class="hint">Share a quick version first. You can always add more details later.</p>
           <form id="addRecipeForm">
-            <label>Actor user ID <input name="actorUserId" value="user_1" required /></label>
-            <label>Title <input name="title" value="Tomato Soup" required /></label>
-            <label>Content <input name="content" value="Roast tomatoes, blend, simmer." required /></label>
-            <label>Image path <input name="imagePath" value="/Users/bryanjackson/Documents/code/CookbookClub/test/fixtures/test-recipe.jpg" required /></label>
+            <label>Recipe title <input name="title" value="Tomato Soup" required /></label>
+            <label>Description <input name="description" value="Roast tomatoes, blend, simmer." /></label>
+            <label>Image path <input name="imagePath" placeholder="Optional absolute path" /></label>
+            <label>Or choose image file
+              <input type="file" name="imageFile" accept="image/*" />
+            </label>
+            <label>Ingredients (one per line)
+              <textarea name="ingredients" rows="4">Tomatoes
+Vegetable stock
+Olive oil</textarea>
+            </label>
+            <label>Instructions (one step per line)
+              <textarea name="instructions" rows="4">Roast tomatoes.
+Blend with stock.
+Simmer for 10 minutes.</textarea>
+            </label>
+            <label>Prep time (ISO8601) <input name="prepTime" value="PT10M" placeholder="PT10M" /></label>
+            <label>Cook time (ISO8601) <input name="cookTime" value="PT20M" placeholder="PT20M" /></label>
+            <label>Total time (ISO8601) <input name="totalTime" value="PT30M" placeholder="PT30M" /></label>
+            <label>Yield <input name="recipeYield" value="2 servings" /></label>
+            <label>Category <input name="recipeCategory" value="Soup" /></label>
+            <label>Cuisine <input name="recipeCuisine" value="Italian" /></label>
+            <label>Keywords (comma-separated) <input name="keywords" value="vegetarian,comfort food" /></label>
+            <p class="hint">Use either image file upload or image path.</p>
             <button type="submit">Add Recipe</button>
           </form>
         </div>
+        <div class="card">
+          <h2>Upcoming Recipes</h2>
+          <div class="inline-form">
+            <label>Search
+              <input id="recipeSearchInput" type="search" placeholder="Search title, author, keyword" />
+            </label>
+            <label>Category
+              <select id="recipeCategoryFilterSelect">
+                <option value="all">All categories</option>
+              </select>
+            </label>
+            <button id="clearRecipeFiltersBtn" type="button" class="ghost-btn">Clear Filters</button>
+          </div>
+          <p id="recipeFilterSummary" class="hint"></p>
+          <form id="listRecipesForm" class="inline-form">
+            <button type="submit">Load Recipes</button>
+          </form>
+          <form id="purgeRecipesForm" class="inline-form action-manager-only">
+            <button type="submit">Clear Upcoming Recipes</button>
+          </form>
+          <div id="recipesView" class="recipes-view">No recipes loaded yet.</div>
+        </div>
       </section>
 
-      <section class="card">
-        <h2>List Upcoming Recipes</h2>
-        <form id="listRecipesForm" class="inline-form">
-          <label>Actor user ID <input name="actorUserId" value="user_1" required /></label>
-          <button type="submit">Load Recipes</button>
-        </form>
-        <pre id="recipesView">[]</pre>
+      <section id="route-members" class="route">
+        <div class="card action-manager-only">
+          <h2>Invite Member</h2>
+          <p class="hint">Invites are immediate for this MVP flow.</p>
+          <form id="addMemberForm" class="compact-form">
+            <label>User name <input name="name" value="Bob" required /></label>
+            <button type="submit">Create User + Invite</button>
+          </form>
+        </div>
+        <div class="card action-manager-only">
+          <h2>Remove Member</h2>
+          <form id="removeMemberForm" class="compact-form">
+            <label>Member
+              <select id="removeMemberUserSelect" name="userId" required></select>
+            </label>
+            <button type="submit">Remove Member</button>
+          </form>
+        </div>
+        <div class="card">
+          <h2>Member Directory</h2>
+          <div id="membersListView" class="members-list">No members loaded.</div>
+        </div>
       </section>
 
-      <section class="card">
-        <h2>Last API Result</h2>
-        <pre id="resultView">No actions yet.</pre>
+      <section id="route-cookbook" class="route">
+        <div class="card">
+          <h2>Favorites</h2>
+          <form id="favoriteForm" class="inline-form">
+            <label>Recipe
+              <select id="favoriteRecipeSelect" name="recipeId" required></select>
+            </label>
+            <button type="submit">Save to Favorites</button>
+          </form>
+          <form id="loadCollectionsForm" class="inline-form">
+            <button type="submit">Load My Collections</button>
+          </form>
+          <div id="collectionsListView" class="members-list">No collections loaded.</div>
+        </div>
       </section>
+
+      <section id="route-settings" class="route">
+        <div class="card">
+          <h2>Settings</h2>
+          <p class="hint">Reminder templates, meetup theme editing, and role changes are planned for a later backend/API phase.</p>
+        </div>
+      </section>
+
+      <details class="card">
+        <summary>Developer Details</summary>
+        <div class="grid">
+          <section>
+            <h2>Status</h2>
+            <pre id="statusView">Loading...</pre>
+          </section>
+          <section>
+            <h2>Members (raw)</h2>
+            <pre id="membersView">[]</pre>
+          </section>
+          <section>
+            <h2>Last API Result</h2>
+            <pre id="resultView">No actions yet.</pre>
+          </section>
+        </div>
+      </details>
     </main>
+    <dialog id="recipeDrawer" class="recipe-drawer">
+      <article class="recipe-drawer-body">
+        <header class="recipe-drawer-header">
+          <h2 id="drawerTitle">Recipe</h2>
+          <button id="closeDrawerBtn" type="button" class="drawer-close">Close</button>
+        </header>
+        <p id="drawerMeta" class="recipe-meta"></p>
+        <p id="drawerDescription" class="recipe-description"></p>
+        <section class="recipe-section">
+          <h4>Ingredients</h4>
+          <ul id="drawerIngredients"></ul>
+        </section>
+        <section class="recipe-section">
+          <h4>Instructions</h4>
+          <ol id="drawerInstructions"></ol>
+        </section>
+      </article>
+    </dialog>
 
     <script type="module" src="/app.js"></script>
   </body>

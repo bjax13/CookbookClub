@@ -7,7 +7,7 @@ function parseArgs(argv) {
     port: 4173,
     host: "127.0.0.1",
     data: null,
-    storage: "json"
+    storage: "json",
   };
 
   while (args.length) {
@@ -49,12 +49,12 @@ function main() {
   const options = parseArgs(process.argv.slice(2));
   const { server, filePath, storage } = createCookbookWebServer({
     dataPath: options.data,
-    storage: options.storage
+    storage: options.storage,
   });
 
   server.listen(options.port, options.host, () => {
     process.stdout.write(
-      `Cookbook Club web running at http://${options.host}:${options.port} (storage=${storage}, data=${filePath})\n`
+      `Cookbook Club web running at http://${options.host}:${options.port} (storage=${storage}, data=${filePath})\n`,
     );
   });
 }

@@ -11,7 +11,7 @@ export function createDefaultState() {
     collectionItems: [],
     cookbookAccessGrants: [],
     notifications: [],
-    counters: {}
+    counters: {},
   };
 }
 

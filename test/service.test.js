@@ -1,9 +1,9 @@
-import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CookbookClubService, CLUB_POLICY } from "../src/service.js";
+import test from "node:test";
+import { CLUB_POLICY, CookbookClubService } from "../src/service.js";
 import { createDefaultState } from "../src/state.js";
 
 function bootstrap() {
@@ -11,7 +11,7 @@ function bootstrap() {
   const service = new CookbookClubService(state);
   const { host } = service.initClub({
     clubName: "Sunday Supper",
-    hostName: "Alice Host"
+    hostName: "Alice Host",
   });
   return { service, host, state };
 }
@@ -29,9 +29,9 @@ test("club can initialize once only", () => {
     () =>
       service.initClub({
         clubName: "Second Club",
-        hostName: "Other Host"
+        hostName: "Other Host",
       }),
-    /single club/
+    /single club/,
   );
 });
 
@@ -43,7 +43,22 @@ test("closed club invite requires host/admin/co_admin", () => {
   service.inviteMember({ actorUserId: host.id, userId: bob.id });
   assert.throws(
     () => service.inviteMember({ actorUserId: bob.id, userId: carol.id }),
-    /Only host\/admin\/co_admin/
+    /Only host\/admin\/co_admin/,
+  );
+});
+
+test("host/admin/co_admin can remove members but not current host", () => {
+  const { service, host } = bootstrap();
+  const bob = service.createUser({ name: "Bob Member" });
+  service.inviteMember({ actorUserId: host.id, userId: bob.id });
+
+  const removed = service.removeMember({ actorUserId: host.id, userId: bob.id });
+  assert.equal(removed.userId, bob.id);
+  assert.throws(() => service.assertMember(bob.id), /User is not a member/);
+
+  assert.throws(
+    () => service.removeMember({ actorUserId: host.id, userId: host.id }),
+    /Cannot remove current host/,
   );
 });
 
@@ -62,11 +77,11 @@ test("host can schedule meetup and set theme", () => {
   const { service, host } = bootstrap();
   const scheduled = service.scheduleUpcomingMeetup({
     actorUserId: host.id,
-    isoDateTime: "2026-04-03T18:30:00.000Z"
+    isoDateTime: "2026-04-03T18:30:00.000Z",
   });
   const themed = service.setMeetupTheme({
     actorUserId: host.id,
-    theme: "Soups"
+    theme: "Soups",
   });
 
   assert.equal(scheduled.scheduledFor, "2026-04-03T18:30:00.000Z");
@@ -82,9 +97,9 @@ test("non-host cannot schedule meetup", () => {
     () =>
       service.scheduleUpcomingMeetup({
         actorUserId: bob.id,
-        isoDateTime: "2026-05-03T18:30:00.000Z"
+        isoDateTime: "2026-05-03T18:30:00.000Z",
       }),
-    /Only current host/
+    /Only current host/,
   );
 });
 
@@ -94,7 +109,7 @@ test("recipe flow: member can add, attendees can view and favorite", () => {
   service.inviteMember({ actorUserId: host.id, userId: bob.id });
   service.scheduleUpcomingMeetup({
     actorUserId: host.id,
-    isoDateTime: "2026-04-03T18:30:00.000Z"
+    isoDateTime: "2026-04-03T18:30:00.000Z",
   });
   service.setMeetupTheme({ actorUserId: host.id, theme: "Breads" });
   const image = makeImage();
@@ -103,7 +118,7 @@ test("recipe flow: member can add, attendees can view and favorite", () => {
     actorUserId: bob.id,
     title: "No-Knead Bread",
     content: "Flour, water, yeast, time.",
-    imagePath: image
+    imagePath: image,
   });
   const recipes = service.listMeetupRecipes({ actorUserId: host.id });
   const favorite = service.favoriteRecipe({ actorUserId: host.id, recipeId: recipe.id });
@@ -113,11 +128,42 @@ test("recipe flow: member can add, attendees can view and favorite", () => {
   assert.equal(favorite.recipeId, recipe.id);
 });
 
+test("recipe supports schema-style fields and legacy aliases", () => {
+  const { service, host } = bootstrap();
+  service.scheduleUpcomingMeetup({
+    actorUserId: host.id,
+    isoDateTime: "2026-04-03T18:30:00.000Z",
+  });
+  const image = makeImage();
+
+  const recipe = service.addRecipe({
+    actorUserId: host.id,
+    name: "Shakshuka",
+    description: "Tomato and eggs.",
+    imagePath: image,
+    recipeIngredient: ["2 eggs", "1 cup tomatoes"],
+    recipeInstructions: [{ name: "Cook", text: "Simmer tomatoes and poach eggs." }],
+    prepTime: "PT10M",
+    cookTime: "PT20M",
+    totalTime: "PT30M",
+    recipeYield: "2 servings",
+    recipeCategory: "Dinner",
+    recipeCuisine: "Middle Eastern",
+    keywords: ["eggs", "one-pan"],
+  });
+
+  assert.equal(recipe.name, "Shakshuka");
+  assert.equal(recipe.title, "Shakshuka");
+  assert.equal(recipe.recipeIngredient.length, 2);
+  assert.equal(recipe.recipeInstructions[0].text, "Simmer tomatoes and poach eggs.");
+  assert.equal(recipe.prepTime, "PT10M");
+});
+
 test("image path must exist when adding recipe", () => {
   const { service, host } = bootstrap();
   service.scheduleUpcomingMeetup({
     actorUserId: host.id,
-    isoDateTime: "2026-04-03T18:30:00.000Z"
+    isoDateTime: "2026-04-03T18:30:00.000Z",
   });
 
   assert.throws(
@@ -126,9 +172,9 @@ test("image path must exist when adding recipe", () => {
         actorUserId: host.id,
         title: "Soup",
         content: "Simmer everything.",
-        imagePath: "/not/real/image.jpg"
+        imagePath: "/not/real/image.jpg",
       }),
-    /Image path not found/
+    /Image path not found/,
   );
 });
 
@@ -140,13 +186,13 @@ test("new member gets forward-only cookbook visibility by default", () => {
 
   service.scheduleUpcomingMeetup({
     actorUserId: host.id,
-    isoDateTime: "2026-04-03T18:30:00.000Z"
+    isoDateTime: "2026-04-03T18:30:00.000Z",
   });
   service.addRecipe({
     actorUserId: host.id,
     title: "Past Recipe",
     content: "Old one",
-    imagePath: image
+    imagePath: image,
   });
   const { past } = service.advanceMeetup({ actorUserId: host.id });
 
@@ -154,18 +200,18 @@ test("new member gets forward-only cookbook visibility by default", () => {
   service.inviteMember({ actorUserId: host.id, userId: carol.id });
   service.scheduleUpcomingMeetup({
     actorUserId: host.id,
-    isoDateTime: "2026-05-03T18:30:00.000Z"
+    isoDateTime: "2026-05-03T18:30:00.000Z",
   });
   service.addRecipe({
     actorUserId: host.id,
     title: "Future Recipe",
     content: "New one",
-    imagePath: image
+    imagePath: image,
   });
 
   assert.throws(
     () => service.listMeetupRecipes({ actorUserId: carol.id, meetupId: past.id }),
-    /No cookbook access/
+    /No cookbook access/,
   );
   const current = service.listMeetupRecipes({ actorUserId: carol.id });
   assert.equal(current.length, 1);
@@ -183,13 +229,13 @@ test("admin/co_admin can grant access to past cookbooks", () => {
 
   service.scheduleUpcomingMeetup({
     actorUserId: host.id,
-    isoDateTime: "2026-04-03T18:30:00.000Z"
+    isoDateTime: "2026-04-03T18:30:00.000Z",
   });
   service.addRecipe({
     actorUserId: host.id,
     title: "Tomato Soup",
     content: "Tomatoes, stock.",
-    imagePath: image
+    imagePath: image,
   });
   const { past } = service.advanceMeetup({ actorUserId: host.id });
 
@@ -198,13 +244,13 @@ test("admin/co_admin can grant access to past cookbooks", () => {
 
   assert.throws(
     () => service.listMeetupRecipes({ actorUserId: dave.id, meetupId: past.id }),
-    /No cookbook access/
+    /No cookbook access/,
   );
 
   const grants = service.grantPastCookbookAccess({
     actorUserId: bob.id,
     targetUserId: dave.id,
-    all: true
+    all: true,
   });
   assert.ok(grants.length > 0);
 
@@ -217,7 +263,7 @@ test("notify run returns pending notifications", () => {
   const { service, host } = bootstrap();
   service.scheduleUpcomingMeetup({
     actorUserId: host.id,
-    isoDateTime: "2026-04-03T18:30:00.000Z"
+    isoDateTime: "2026-04-03T18:30:00.000Z",
   });
   const delivered = service.runNotifications({ now: "2026-03-31T12:00:00.000Z" });
   assert.ok(delivered.length >= 1);
@@ -228,7 +274,7 @@ test("notify run only delivers reminders due by provided timestamp", () => {
   const { service, host } = bootstrap();
   service.scheduleUpcomingMeetup({
     actorUserId: host.id,
-    isoDateTime: "2026-04-10T18:30:00.000Z"
+    isoDateTime: "2026-04-10T18:30:00.000Z",
   });
 
   const tooEarly = service.runNotifications({ now: "2026-04-01T12:00:00.000Z" });
@@ -236,14 +282,16 @@ test("notify run only delivers reminders due by provided timestamp", () => {
 
   assert.equal(tooEarly.length, 1);
   assert.ok(dayBefore.length >= 1);
-  assert.ok(dayBefore.every((entry) => Date.parse(entry.dueAt) <= Date.parse("2026-04-09T19:00:00.000Z")));
+  assert.ok(
+    dayBefore.every((entry) => Date.parse(entry.dueAt) <= Date.parse("2026-04-09T19:00:00.000Z")),
+  );
 });
 
 test("rescheduling meetup updates pending reminder dueAt values without duplication", () => {
   const { service, host } = bootstrap();
   service.scheduleUpcomingMeetup({
     actorUserId: host.id,
-    isoDateTime: "2026-04-10T18:30:00.000Z"
+    isoDateTime: "2026-04-10T18:30:00.000Z",
   });
   const beforeCount = service.state.notifications.length;
   const original = service.state.notifications.filter((n) => n.key === "meetup_0h")[0];
@@ -251,7 +299,7 @@ test("rescheduling meetup updates pending reminder dueAt values without duplicat
 
   service.scheduleUpcomingMeetup({
     actorUserId: host.id,
-    isoDateTime: "2026-04-12T20:00:00.000Z"
+    isoDateTime: "2026-04-12T20:00:00.000Z",
   });
   const afterCount = service.state.notifications.length;
   const updated = service.state.notifications.filter((n) => n.key === "meetup_0h")[0];
@@ -265,14 +313,14 @@ test("host can customize reminder policy windows", () => {
   const policy = service.setReminderPolicy({
     actorUserId: host.id,
     meetupWindowHours: [72, 24, 0],
-    recipePromptHours: 36
+    recipePromptHours: 36,
   });
   assert.deepEqual(policy.meetupWindowHours, [72, 24, 0]);
   assert.equal(policy.recipePromptHours, 36);
 
   service.scheduleUpcomingMeetup({
     actorUserId: host.id,
-    isoDateTime: "2026-04-10T18:30:00.000Z"
+    isoDateTime: "2026-04-10T18:30:00.000Z",
   });
   const keys = service.state.notifications.map((n) => n.key);
   assert.ok(keys.includes("meetup_72h"));
@@ -295,7 +343,7 @@ test("host can apply reminder template and non-host cannot", () => {
 
   assert.throws(
     () => service.applyReminderTemplate({ actorUserId: bob.id, templateName: "tight" }),
-    /Only current host/
+    /Only current host/,
   );
 });
 
@@ -305,7 +353,7 @@ test("host can add/remove custom reminder templates", () => {
     actorUserId: host.id,
     name: "weekend_focus",
     meetupWindowHours: [48, 6, 0],
-    recipePromptHours: 12
+    recipePromptHours: 12,
   });
   assert.equal(added.name, "weekend_focus");
 
@@ -314,19 +362,19 @@ test("host can add/remove custom reminder templates", () => {
 
   const applied = service.applyReminderTemplate({
     actorUserId: host.id,
-    templateName: "weekend_focus"
+    templateName: "weekend_focus",
   });
   assert.equal(applied.source, "custom");
   assert.deepEqual(applied.policy.meetupWindowHours, [48, 6, 0]);
 
   const removed = service.removeReminderTemplate({
     actorUserId: host.id,
-    name: "weekend_focus"
+    name: "weekend_focus",
   });
   assert.equal(removed.removed, "weekend_focus");
   assert.throws(
     () => service.applyReminderTemplate({ actorUserId: host.id, templateName: "weekend_focus" }),
-    /Unknown reminder template/
+    /Unknown reminder template/,
   );
 });
 
@@ -336,20 +384,22 @@ test("custom reminder templates can be exported and imported with a prefix", () 
     actorUserId: host.id,
     name: "weekend_focus",
     meetupWindowHours: [48, 6, 0],
-    recipePromptHours: 12
+    recipePromptHours: 12,
   });
 
   const exported = service.exportCustomReminderTemplates();
   const imported = service.importCustomReminderTemplates({
     actorUserId: host.id,
     templates: exported,
-    prefix: "shared"
+    prefix: "shared",
   });
 
   assert.ok(imported.imported.includes("shared_weekend_focus"));
   assert.equal(imported.skipped.length, 0);
   const templates = service.listReminderTemplates();
-  assert.ok(templates.some((entry) => entry.name === "shared_weekend_focus" && entry.source === "custom"));
+  assert.ok(
+    templates.some((entry) => entry.name === "shared_weekend_focus" && entry.source === "custom"),
+  );
 });
 
 test("built-in reminder templates cannot be overwritten", () => {
@@ -360,9 +410,9 @@ test("built-in reminder templates cannot be overwritten", () => {
         actorUserId: host.id,
         name: "standard",
         meetupWindowHours: [1],
-        recipePromptHours: 1
+        recipePromptHours: 1,
       }),
-    /Cannot overwrite built-in/
+    /Cannot overwrite built-in/,
   );
 });
 
@@ -370,7 +420,7 @@ test("inviting a member after scheduling creates reminders for the new member", 
   const { service, host } = bootstrap();
   service.scheduleUpcomingMeetup({
     actorUserId: host.id,
-    isoDateTime: "2026-04-10T18:30:00.000Z"
+    isoDateTime: "2026-04-10T18:30:00.000Z",
   });
   const bob = service.createUser({ name: "Bob Member" });
   service.inviteMember({ actorUserId: host.id, userId: bob.id });
@@ -384,13 +434,18 @@ test("pending notification listing does not mark notifications delivered", () =>
   const { service, host } = bootstrap();
   service.scheduleUpcomingMeetup({
     actorUserId: host.id,
-    isoDateTime: "2026-04-10T18:30:00.000Z"
+    isoDateTime: "2026-04-10T18:30:00.000Z",
   });
 
-  const listed = service.listPendingNotifications({ now: "2026-04-09T19:00:00.000Z", userId: host.id });
+  const listed = service.listPendingNotifications({
+    now: "2026-04-09T19:00:00.000Z",
+    userId: host.id,
+  });
   assert.ok(listed.length >= 1);
 
-  const stillPending = service.state.notifications.filter((entry) => entry.userId === host.id && !entry.deliveredAt);
+  const stillPending = service.state.notifications.filter(
+    (entry) => entry.userId === host.id && !entry.deliveredAt,
+  );
   assert.ok(stillPending.length >= listed.length);
 });
 
@@ -400,7 +455,7 @@ test("pending notification list can be filtered by user", () => {
   service.inviteMember({ actorUserId: host.id, userId: bob.id });
   service.scheduleUpcomingMeetup({
     actorUserId: host.id,
-    isoDateTime: "2026-04-10T18:30:00.000Z"
+    isoDateTime: "2026-04-10T18:30:00.000Z",
   });
 
   const forHost = service.listPendingNotifications({ userId: host.id });
@@ -415,20 +470,17 @@ test("notification APIs reject invalid now timestamps", () => {
   const { service } = bootstrap();
   assert.throws(
     () => service.runNotifications({ now: "not-a-date" }),
-    /Invalid notification timestamp/
+    /Invalid notification timestamp/,
   );
   assert.throws(
     () => service.listPendingNotifications({ now: "still-not-a-date" }),
-    /Invalid notification timestamp/
+    /Invalid notification timestamp/,
   );
 });
 
 test("pending notification list rejects unknown user filter", () => {
   const { service } = bootstrap();
-  assert.throws(
-    () => service.listPendingNotifications({ userId: "user_999" }),
-    /Unknown user/
-  );
+  assert.throws(() => service.listPendingNotifications({ userId: "user_999" }), /Unknown user/);
 });
 
 test("favorite can be added to personal cookbook collection", () => {
@@ -436,25 +488,48 @@ test("favorite can be added to personal cookbook collection", () => {
   const image = makeImage();
   service.scheduleUpcomingMeetup({
     actorUserId: host.id,
-    isoDateTime: "2026-04-03T18:30:00.000Z"
+    isoDateTime: "2026-04-03T18:30:00.000Z",
   });
   const recipe = service.addRecipe({
     actorUserId: host.id,
     title: "Berry Pie",
     content: "Berries and crust.",
-    imagePath: image
+    imagePath: image,
   });
 
   service.addFavoriteToCollection({
     actorUserId: host.id,
     recipeId: recipe.id,
-    collectionName: "Desserts"
+    collectionName: "Desserts",
   });
   const collections = service.listPersonalCollections({ actorUserId: host.id });
   assert.equal(collections.length, 1);
   assert.equal(collections[0].name, "Desserts");
   assert.equal(collections[0].recipes.length, 1);
   assert.equal(collections[0].recipes[0].title, "Berry Pie");
+});
+
+test("host can purge all recipes", () => {
+  const { service, host } = bootstrap();
+  const image = makeImage();
+  service.scheduleUpcomingMeetup({
+    actorUserId: host.id,
+    isoDateTime: "2026-04-03T18:30:00.000Z",
+  });
+  service.addRecipe({
+    actorUserId: host.id,
+    name: "Modern Soup",
+    description: "Structured",
+    imagePath: image,
+    recipeIngredient: ["stock"],
+    recipeInstructions: [{ text: "Simmer." }],
+  });
+
+  const result = service.purgeRecipes({ actorUserId: host.id, mode: "all" });
+  assert.equal(result.removedCount, 1);
+
+  const remaining = service.listMeetupRecipes({ actorUserId: host.id });
+  assert.equal(remaining.length, 0);
 });
 
 test("host transfer updates club host and upcoming meetup host", () => {
@@ -476,7 +551,7 @@ test("set-role cannot directly change current host role", () => {
   const { service, host } = bootstrap();
   assert.throws(
     () => service.setRole({ actorUserId: host.id, userId: host.id, role: "admin" }),
-    /Use host transfer before changing the current host role/
+    /Use host transfer before changing the current host role/,
   );
 });
 
@@ -490,25 +565,25 @@ test("grant past cookbook access from a specific meetup boundary", () => {
 
   service.scheduleUpcomingMeetup({
     actorUserId: host.id,
-    isoDateTime: "2026-04-03T18:30:00.000Z"
+    isoDateTime: "2026-04-03T18:30:00.000Z",
   });
   service.addRecipe({
     actorUserId: host.id,
     title: "M1",
     content: "One",
-    imagePath: image
+    imagePath: image,
   });
   const firstPast = service.advanceMeetup({ actorUserId: host.id }).past;
 
   service.scheduleUpcomingMeetup({
     actorUserId: host.id,
-    isoDateTime: "2026-05-03T18:30:00.000Z"
+    isoDateTime: "2026-05-03T18:30:00.000Z",
   });
   service.addRecipe({
     actorUserId: host.id,
     title: "M2",
     content: "Two",
-    imagePath: image
+    imagePath: image,
   });
   const secondPast = service.advanceMeetup({ actorUserId: host.id }).past;
 
@@ -516,14 +591,14 @@ test("grant past cookbook access from a specific meetup boundary", () => {
   const grants = service.grantPastCookbookAccess({
     actorUserId: admin.id,
     targetUserId: lateUser.id,
-    fromMeetupId: secondPast.id
+    fromMeetupId: secondPast.id,
   });
 
   assert.equal(grants.length, 1);
   assert.equal(grants[0].meetupId, secondPast.id);
   assert.throws(
     () => service.listMeetupRecipes({ actorUserId: lateUser.id, meetupId: firstPast.id }),
-    /No cookbook access/
+    /No cookbook access/,
   );
   const visible = service.listMeetupRecipes({ actorUserId: lateUser.id, meetupId: secondPast.id });
   assert.equal(visible.length, 1);
@@ -543,9 +618,9 @@ test("grant past cookbook access rejects unknown meetup boundary", () => {
       service.grantPastCookbookAccess({
         actorUserId: admin.id,
         targetUserId: lateUser.id,
-        fromMeetupId: "meetup_999"
+        fromMeetupId: "meetup_999",
       }),
-    /Unknown past meetup/
+    /Unknown past meetup/,
   );
 });
 
@@ -556,27 +631,24 @@ test("service validates required names and recipe text", () => {
     () =>
       service.initClub({
         clubName: "   ",
-        hostName: "Alice"
+        hostName: "Alice",
       }),
-    /Club name is required/
+    /Club name is required/,
   );
 
   const { host } = service.initClub({
     clubName: "Sunday Supper",
-    hostName: "Alice"
+    hostName: "Alice",
   });
-  assert.throws(
-    () => service.createUser({ name: "  " }),
-    /User name is required/
-  );
+  assert.throws(() => service.createUser({ name: "  " }), /User name is required/);
 
   assert.throws(
     () =>
       service.setMeetupTheme({
         actorUserId: host.id,
-        theme: "  "
+        theme: "  ",
       }),
-    /Theme is required/
+    /Theme is required/,
   );
 });
 
@@ -584,7 +656,7 @@ test("meetup list returns history with host details and id lookup", () => {
   const { service, host } = bootstrap();
   service.scheduleUpcomingMeetup({
     actorUserId: host.id,
-    isoDateTime: "2026-04-03T18:30:00.000Z"
+    isoDateTime: "2026-04-03T18:30:00.000Z",
   });
   const first = service.getUpcomingMeetup();
   service.advanceMeetup({ actorUserId: host.id });

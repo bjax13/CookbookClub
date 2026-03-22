@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createDefaultState } from "./state.js";
 import { loadStateFromSqlite, saveStateToSqlite } from "./sqlite-storage.js";
+import { createDefaultState } from "./state.js";
 
 const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_FILE = resolve(ROOT_DIR, "data", "state.json");
@@ -70,7 +70,7 @@ function validateSnapshotShape(value) {
     "personalCollections",
     "collectionItems",
     "cookbookAccessGrants",
-    "notifications"
+    "notifications",
   ];
   for (const key of requiredArrays) {
     if (!Array.isArray(value[key])) {
@@ -102,7 +102,7 @@ export function verifyStateSnapshotFile(sourcePath) {
     return {
       filePath: absolute,
       ok: false,
-      issues: ["Snapshot file is empty."]
+      issues: ["Snapshot file is empty."],
     };
   }
 
@@ -113,7 +113,7 @@ export function verifyStateSnapshotFile(sourcePath) {
     return {
       filePath: absolute,
       ok: false,
-      issues: [`Invalid JSON: ${error.message}`]
+      issues: [`Invalid JSON: ${error.message}`],
     };
   }
 
@@ -129,8 +129,8 @@ export function verifyStateSnapshotFile(sourcePath) {
             users: parsed.users.length,
             meetups: parsed.meetups.length,
             recipes: parsed.recipes.length,
-            notifications: parsed.notifications.length
+            notifications: parsed.notifications.length,
           }
-        : null
+        : null,
   };
 }

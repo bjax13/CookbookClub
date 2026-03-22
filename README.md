@@ -53,6 +53,17 @@ npm run start:web -- --port 4173 --host 127.0.0.1 --data ./data/web-state.json
 
 Open `http://127.0.0.1:4173`.
 
+Start React Native app (Expo):
+
+```bash
+npm run mobile:install
+npm run start:web -- --port 4173 --host 0.0.0.0 --data ./data/mobile-state.json
+EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:4173 npm run start:mobile
+```
+
+For Android emulator, use `EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:4173`.
+For physical devices, use your LAN IP (for example `http://192.168.1.20:4173`).
+
 ```bash
 npm run start -- --data ./data/dev-state.json club init --name "Cook Book Club" --host-name "Alice"
 npm run start -- --data ./data/dev-state.json club set-reminders --actor user_1 --windows 72,24,3,0 --recipe-prompt-hours 36
@@ -123,6 +134,7 @@ Manual testing docs:
 
 - `docs/manual-testing.md` (scenario-based checklist with expected outcomes)
 - `docs/manual-verification.md` (quick command script)
+- `docs/mobile-api-contract.md` (React Native API identity/auth contract)
 
 ## CI
 

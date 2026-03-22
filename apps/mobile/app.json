@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Cookbook Club",
+    "slug": "cookbook-club-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#f5f0e8"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {},
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Cookbook Club to choose recipe photos from your library.",
+          "cameraPermission": "Allow Cookbook Club to take recipe photos with your camera."
+        }
+      ]
+    ]
+  }
+}

@@ -1,11 +1,11 @@
-import test from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 const ROOT_DIR = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const CLI = resolve(ROOT_DIR, "src", "cli.js");
@@ -13,7 +13,7 @@ const CLI = resolve(ROOT_DIR, "src", "cli.js");
 function runCli(args, cwd = ROOT_DIR) {
   const result = spawnSync(process.execPath, [CLI, ...args], {
     cwd,
-    encoding: "utf8"
+    encoding: "utf8",
   });
   return result;
 }
@@ -27,7 +27,9 @@ test("CLI version reports package version", () => {
   const result = runCli(["version"]);
   assert.equal(result.status, 0);
   const output = parseJsonStdout(result);
-  const packageVersion = JSON.parse(readFileSync(resolve(ROOT_DIR, "package.json"), "utf8")).version;
+  const packageVersion = JSON.parse(
+    readFileSync(resolve(ROOT_DIR, "package.json"), "utf8"),
+  ).version;
   assert.equal(output.version, packageVersion);
 });
 
@@ -46,7 +48,16 @@ test("CLI status reports initialized club summary", () => {
   const dir = mkdtempSync(join(tmpdir(), "cookbook-cli-"));
   const dataFile = join(dir, "state.json");
 
-  let result = runCli(["--data", dataFile, "club", "init", "--name", "Cook Club", "--host-name", "Alice"]);
+  let result = runCli([
+    "--data",
+    dataFile,
+    "club",
+    "init",
+    "--name",
+    "Cook Club",
+    "--host-name",
+    "Alice",
+  ]);
   assert.equal(result.status, 0);
 
   result = runCli([
@@ -57,7 +68,7 @@ test("CLI status reports initialized club summary", () => {
     "--actor",
     "user_1",
     "--at",
-    "2026-04-03T18:30:00.000Z"
+    "2026-04-03T18:30:00.000Z",
   ]);
   assert.equal(result.status, 0);
 
@@ -76,7 +87,16 @@ test("CLI end-to-end happy path", () => {
   const img = join(dir, "dish.jpg");
   writeFileSync(img, "image");
 
-  let result = runCli(["--data", dataFile, "club", "init", "--name", "Cook Club", "--host-name", "Alice"]);
+  let result = runCli([
+    "--data",
+    dataFile,
+    "club",
+    "init",
+    "--name",
+    "Cook Club",
+    "--host-name",
+    "Alice",
+  ]);
   assert.equal(result.status, 0);
   const init = parseJsonStdout(result);
   assert.equal(init.host.id, "user_1");
@@ -86,7 +106,16 @@ test("CLI end-to-end happy path", () => {
   const bob = parseJsonStdout(result);
   assert.equal(bob.id, "user_2");
 
-  result = runCli(["--data", dataFile, "member", "invite", "--actor", "user_1", "--user", "user_2"]);
+  result = runCli([
+    "--data",
+    dataFile,
+    "member",
+    "invite",
+    "--actor",
+    "user_1",
+    "--user",
+    "user_2",
+  ]);
   assert.equal(result.status, 0);
 
   result = runCli([
@@ -97,7 +126,7 @@ test("CLI end-to-end happy path", () => {
     "--actor",
     "user_1",
     "--at",
-    "2026-04-03T18:30:00.000Z"
+    "2026-04-03T18:30:00.000Z",
   ]);
   assert.equal(result.status, 0);
 
@@ -113,7 +142,7 @@ test("CLI end-to-end happy path", () => {
     "--content",
     "Mix and simmer",
     "--image",
-    img
+    img,
   ]);
   assert.equal(result.status, 0);
   const recipe = parseJsonStdout(result);
@@ -126,31 +155,22 @@ test("CLI end-to-end happy path", () => {
   assert.equal(recipes[0].title, "Soup");
 });
 
-test("CLI enforces closed policy member invite restriction", () => {
+test("CLI recipe add supports schema-style fields", () => {
   const dir = mkdtempSync(join(tmpdir(), "cookbook-cli-"));
   const dataFile = join(dir, "state.json");
+  const img = join(dir, "dish.jpg");
+  writeFileSync(img, "image");
 
-  let result = runCli(["--data", dataFile, "club", "init", "--name", "Cook Club", "--host-name", "Alice"]);
-  assert.equal(result.status, 0);
-
-  result = runCli(["--data", dataFile, "user", "add", "--name", "Bob"]);
-  assert.equal(result.status, 0);
-  result = runCli(["--data", dataFile, "user", "add", "--name", "Carol"]);
-  assert.equal(result.status, 0);
-
-  result = runCli(["--data", dataFile, "member", "invite", "--actor", "user_1", "--user", "user_2"]);
-  assert.equal(result.status, 0);
-
-  result = runCli(["--data", dataFile, "member", "invite", "--actor", "user_2", "--user", "user_3"]);
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /Only host\/admin\/co_admin/);
-});
-
-test("CLI notify list previews due reminders without delivering", () => {
-  const dir = mkdtempSync(join(tmpdir(), "cookbook-cli-"));
-  const dataFile = join(dir, "state.json");
-
-  let result = runCli(["--data", dataFile, "club", "init", "--name", "Cook Club", "--host-name", "Alice"]);
+  let result = runCli([
+    "--data",
+    dataFile,
+    "club",
+    "init",
+    "--name",
+    "Cook Club",
+    "--host-name",
+    "Alice",
+  ]);
   assert.equal(result.status, 0);
   result = runCli([
     "--data",
@@ -160,7 +180,116 @@ test("CLI notify list previews due reminders without delivering", () => {
     "--actor",
     "user_1",
     "--at",
-    "2026-04-10T18:30:00.000Z"
+    "2026-04-03T18:30:00.000Z",
+  ]);
+  assert.equal(result.status, 0);
+
+  result = runCli([
+    "--data",
+    dataFile,
+    "recipe",
+    "add",
+    "--actor",
+    "user_1",
+    "--name",
+    "Lasagna",
+    "--description",
+    "Layer and bake.",
+    "--title",
+    "Lasagna",
+    "--content",
+    "Layer and bake.",
+    "--ingredients",
+    "noodles|sauce|cheese",
+    "--instructions",
+    "Layer ingredients|Bake until bubbling",
+    "--prep-time",
+    "PT20M",
+    "--cook-time",
+    "PT40M",
+    "--total-time",
+    "PT1H",
+    "--image",
+    img,
+  ]);
+  assert.equal(result.status, 0);
+  const recipe = parseJsonStdout(result);
+  assert.equal(recipe.name, "Lasagna");
+  assert.equal(recipe.recipeIngredient.length, 3);
+  assert.equal(recipe.prepTime, "PT20M");
+});
+
+test("CLI enforces closed policy member invite restriction", () => {
+  const dir = mkdtempSync(join(tmpdir(), "cookbook-cli-"));
+  const dataFile = join(dir, "state.json");
+
+  let result = runCli([
+    "--data",
+    dataFile,
+    "club",
+    "init",
+    "--name",
+    "Cook Club",
+    "--host-name",
+    "Alice",
+  ]);
+  assert.equal(result.status, 0);
+
+  result = runCli(["--data", dataFile, "user", "add", "--name", "Bob"]);
+  assert.equal(result.status, 0);
+  result = runCli(["--data", dataFile, "user", "add", "--name", "Carol"]);
+  assert.equal(result.status, 0);
+
+  result = runCli([
+    "--data",
+    dataFile,
+    "member",
+    "invite",
+    "--actor",
+    "user_1",
+    "--user",
+    "user_2",
+  ]);
+  assert.equal(result.status, 0);
+
+  result = runCli([
+    "--data",
+    dataFile,
+    "member",
+    "invite",
+    "--actor",
+    "user_2",
+    "--user",
+    "user_3",
+  ]);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Only host\/admin\/co_admin/);
+});
+
+test("CLI notify list previews due reminders without delivering", () => {
+  const dir = mkdtempSync(join(tmpdir(), "cookbook-cli-"));
+  const dataFile = join(dir, "state.json");
+
+  let result = runCli([
+    "--data",
+    dataFile,
+    "club",
+    "init",
+    "--name",
+    "Cook Club",
+    "--host-name",
+    "Alice",
+  ]);
+  assert.equal(result.status, 0);
+  result = runCli([
+    "--data",
+    dataFile,
+    "meetup",
+    "schedule",
+    "--actor",
+    "user_1",
+    "--at",
+    "2026-04-10T18:30:00.000Z",
   ]);
   assert.equal(result.status, 0);
 
@@ -179,7 +308,16 @@ test("CLI notify commands reject invalid --now values", () => {
   const dir = mkdtempSync(join(tmpdir(), "cookbook-cli-"));
   const dataFile = join(dir, "state.json");
 
-  let result = runCli(["--data", dataFile, "club", "init", "--name", "Cook Club", "--host-name", "Alice"]);
+  let result = runCli([
+    "--data",
+    dataFile,
+    "club",
+    "init",
+    "--name",
+    "Cook Club",
+    "--host-name",
+    "Alice",
+  ]);
   assert.equal(result.status, 0);
 
   result = runCli(["--data", dataFile, "notify", "list", "--now", "bad-date"]);
@@ -197,7 +335,16 @@ test("CLI can export and import state snapshots", () => {
   const dataB = join(dir, "state-b.json");
   const backup = join(dir, "backup.json");
 
-  let result = runCli(["--data", dataA, "club", "init", "--name", "Cook Club", "--host-name", "Alice"]);
+  let result = runCli([
+    "--data",
+    dataA,
+    "club",
+    "init",
+    "--name",
+    "Cook Club",
+    "--host-name",
+    "Alice",
+  ]);
   assert.equal(result.status, 0);
 
   result = runCli(["--data", dataA, "data", "export", "--out", backup]);
@@ -231,7 +378,16 @@ test("CLI can verify backup snapshots", () => {
   const dataFile = join(dir, "state.json");
   const backup = join(dir, "backup.json");
 
-  let result = runCli(["--data", dataFile, "club", "init", "--name", "Cook Club", "--host-name", "Alice"]);
+  let result = runCli([
+    "--data",
+    dataFile,
+    "club",
+    "init",
+    "--name",
+    "Cook Club",
+    "--host-name",
+    "Alice",
+  ]);
   assert.equal(result.status, 0);
 
   result = runCli(["--data", dataFile, "data", "export", "--out", backup]);
@@ -270,7 +426,7 @@ test("CLI supports sqlite storage backend", () => {
     "--name",
     "SQLite Club",
     "--host-name",
-    "Alice"
+    "Alice",
   ]);
   assert.equal(result.status, 0);
 
@@ -294,14 +450,14 @@ test("CLI data info reports sqlite migration versions and counts", () => {
     "--name",
     "SQLite Club",
     "--host-name",
-    "Alice"
+    "Alice",
   ]);
   assert.equal(result.status, 0);
 
   result = runCli(["--storage", "sqlite", "--data", dbFile, "data", "info"]);
   assert.equal(result.status, 0);
   const info = parseJsonStdout(result);
-  assert.deepEqual(info.versions, [1, 2, 3, 4, 5]);
+  assert.deepEqual(info.versions, [1, 2, 3, 4, 5, 6]);
   assert.equal(info.counts.clubs, 1);
   assert.equal(info.counts.users, 1);
 });
@@ -310,7 +466,7 @@ test("sqlite schema enforces foreign keys", () => {
   const dir = mkdtempSync(join(tmpdir(), "cookbook-cli-"));
   const dbFile = join(dir, "fk.sqlite");
 
-  let result = runCli([
+  const result = runCli([
     "--storage",
     "sqlite",
     "--data",
@@ -320,7 +476,7 @@ test("sqlite schema enforces foreign keys", () => {
     "--name",
     "FK Club",
     "--host-name",
-    "Alice"
+    "Alice",
   ]);
   assert.equal(result.status, 0);
 
@@ -331,10 +487,17 @@ test("sqlite schema enforces foreign keys", () => {
       () =>
         db
           .prepare(
-            "INSERT INTO memberships (id, club_id, user_id, role, joined_at, cookbook_access_from) VALUES (?, ?, ?, ?, ?, ?)"
+            "INSERT INTO memberships (id, club_id, user_id, role, joined_at, cookbook_access_from) VALUES (?, ?, ?, ?, ?, ?)",
           )
-          .run("membership_bad", "club_missing", "user_missing", "member", "2026-01-01T00:00:00.000Z", null),
-      /FOREIGN KEY/
+          .run(
+            "membership_bad",
+            "club_missing",
+            "user_missing",
+            "member",
+            "2026-01-01T00:00:00.000Z",
+            null,
+          ),
+      /FOREIGN KEY/,
     );
   } finally {
     db.close();
@@ -360,8 +523,8 @@ test("legacy sqlite app_state is migrated into normalized tables", () => {
           name: "Legacy Club",
           hostUserId: "user_1",
           membershipPolicy: "closed",
-          createdAt: "2026-01-01T00:00:00.000Z"
-        }
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
       ],
       users: [
         {
@@ -369,8 +532,8 @@ test("legacy sqlite app_state is migrated into normalized tables", () => {
           name: "Legacy Host",
           email: null,
           phone: null,
-          createdAt: "2026-01-01T00:00:00.000Z"
-        }
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
       ],
       memberships: [
         {
@@ -379,8 +542,8 @@ test("legacy sqlite app_state is migrated into normalized tables", () => {
           userId: "user_1",
           role: "host",
           joinedAt: "2026-01-01T00:00:00.000Z",
-          cookbookAccessFrom: null
-        }
+          cookbookAccessFrom: null,
+        },
       ],
       meetups: [
         {
@@ -390,8 +553,8 @@ test("legacy sqlite app_state is migrated into normalized tables", () => {
           scheduledFor: null,
           theme: "TBD",
           status: "upcoming",
-          createdAt: "2026-01-01T00:00:00.000Z"
-        }
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
       ],
       recipes: [],
       favorites: [],
@@ -399,7 +562,7 @@ test("legacy sqlite app_state is migrated into normalized tables", () => {
       collectionItems: [],
       cookbookAccessGrants: [],
       notifications: [],
-      counters: { club: 1, user: 1, membership: 1, meetup: 1 }
+      counters: { club: 1, user: 1, membership: 1, meetup: 1 },
     };
     db.prepare("INSERT INTO app_state (id, data) VALUES (1, ?)").run(JSON.stringify(legacyState));
   } finally {
@@ -417,7 +580,16 @@ test("CLI can set custom reminder policy for club", () => {
   const dir = mkdtempSync(join(tmpdir(), "cookbook-cli-"));
   const dataFile = join(dir, "state.json");
 
-  let result = runCli(["--data", dataFile, "club", "init", "--name", "Cook Club", "--host-name", "Alice"]);
+  let result = runCli([
+    "--data",
+    dataFile,
+    "club",
+    "init",
+    "--name",
+    "Cook Club",
+    "--host-name",
+    "Alice",
+  ]);
   assert.equal(result.status, 0);
 
   result = runCli([
@@ -430,7 +602,7 @@ test("CLI can set custom reminder policy for club", () => {
     "--windows",
     "72,24,0",
     "--recipe-prompt-hours",
-    "36"
+    "36",
   ]);
   assert.equal(result.status, 0);
   const policy = parseJsonStdout(result);
@@ -442,7 +614,16 @@ test("CLI reminder templates can be listed and applied", () => {
   const dir = mkdtempSync(join(tmpdir(), "cookbook-cli-"));
   const dataFile = join(dir, "state.json");
 
-  let result = runCli(["--data", dataFile, "club", "init", "--name", "Cook Club", "--host-name", "Alice"]);
+  let result = runCli([
+    "--data",
+    dataFile,
+    "club",
+    "init",
+    "--name",
+    "Cook Club",
+    "--host-name",
+    "Alice",
+  ]);
   assert.equal(result.status, 0);
 
   result = runCli(["--data", dataFile, "club", "reminder-templates"]);
@@ -458,7 +639,7 @@ test("CLI reminder templates can be listed and applied", () => {
     "--actor",
     "user_1",
     "--template",
-    "same_day"
+    "same_day",
   ]);
   assert.equal(result.status, 0);
   const applied = parseJsonStdout(result);
@@ -469,7 +650,16 @@ test("CLI can add and remove custom reminder templates", () => {
   const dir = mkdtempSync(join(tmpdir(), "cookbook-cli-"));
   const dataFile = join(dir, "state.json");
 
-  let result = runCli(["--data", dataFile, "club", "init", "--name", "Cook Club", "--host-name", "Alice"]);
+  let result = runCli([
+    "--data",
+    dataFile,
+    "club",
+    "init",
+    "--name",
+    "Cook Club",
+    "--host-name",
+    "Alice",
+  ]);
   assert.equal(result.status, 0);
 
   result = runCli([
@@ -484,7 +674,7 @@ test("CLI can add and remove custom reminder templates", () => {
     "--windows",
     "48,6,0",
     "--recipe-prompt-hours",
-    "12"
+    "12",
   ]);
   assert.equal(result.status, 0);
   const added = parseJsonStdout(result);
@@ -498,7 +688,7 @@ test("CLI can add and remove custom reminder templates", () => {
     "--actor",
     "user_1",
     "--template",
-    "weekend_focus"
+    "weekend_focus",
   ]);
   assert.equal(result.status, 0);
   const applied = parseJsonStdout(result);
@@ -512,7 +702,7 @@ test("CLI can add and remove custom reminder templates", () => {
     "--actor",
     "user_1",
     "--name",
-    "weekend_focus"
+    "weekend_focus",
   ]);
   assert.equal(result.status, 0);
   const removed = parseJsonStdout(result);
@@ -525,7 +715,16 @@ test("CLI can export and import custom reminder templates", () => {
   const dataB = join(dir, "state-b.json");
   const templateFile = join(dir, "templates.json");
 
-  let result = runCli(["--data", dataA, "club", "init", "--name", "Club A", "--host-name", "Alice"]);
+  let result = runCli([
+    "--data",
+    dataA,
+    "club",
+    "init",
+    "--name",
+    "Club A",
+    "--host-name",
+    "Alice",
+  ]);
   assert.equal(result.status, 0);
 
   result = runCli([
@@ -540,7 +739,7 @@ test("CLI can export and import custom reminder templates", () => {
     "--windows",
     "48,6,0",
     "--recipe-prompt-hours",
-    "12"
+    "12",
   ]);
   assert.equal(result.status, 0);
 
@@ -565,7 +764,7 @@ test("CLI can export and import custom reminder templates", () => {
     "--in",
     templateFile,
     "--prefix",
-    "shared"
+    "shared",
   ]);
   assert.equal(result.status, 0);
   const imported = parseJsonStdout(result);
@@ -577,7 +776,16 @@ test("CLI rejects invalid reminder window list entries", () => {
   const dir = mkdtempSync(join(tmpdir(), "cookbook-cli-"));
   const dataFile = join(dir, "state.json");
 
-  let result = runCli(["--data", dataFile, "club", "init", "--name", "Cook Club", "--host-name", "Alice"]);
+  let result = runCli([
+    "--data",
+    dataFile,
+    "club",
+    "init",
+    "--name",
+    "Cook Club",
+    "--host-name",
+    "Alice",
+  ]);
   assert.equal(result.status, 0);
 
   result = runCli([
@@ -588,7 +796,7 @@ test("CLI rejects invalid reminder window list entries", () => {
     "--actor",
     "user_1",
     "--windows",
-    "72,bad,0"
+    "72,bad,0",
   ]);
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Invalid hours list entry/);
@@ -608,7 +816,7 @@ test("CLI data doctor reports sqlite health", () => {
     "--name",
     "Doctor Club",
     "--host-name",
-    "Alice"
+    "Alice",
   ]);
   assert.equal(result.status, 0);
 
@@ -634,7 +842,7 @@ test("CLI data doctor --repair returns repaired health report", () => {
     "--name",
     "Doctor Club",
     "--host-name",
-    "Alice"
+    "Alice",
   ]);
   assert.equal(result.status, 0);
 
@@ -659,7 +867,7 @@ test("CLI data doctor detects malformed sqlite JSON and repair fixes it with bac
     "--name",
     "Doctor Club",
     "--host-name",
-    "Alice"
+    "Alice",
   ]);
   assert.equal(result.status, 0);
 
@@ -690,7 +898,16 @@ test("CLI meetup list and meetup show --id expose meetup history", () => {
   const dir = mkdtempSync(join(tmpdir(), "cookbook-cli-"));
   const dataFile = join(dir, "state.json");
 
-  let result = runCli(["--data", dataFile, "club", "init", "--name", "Cook Club", "--host-name", "Alice"]);
+  let result = runCli([
+    "--data",
+    dataFile,
+    "club",
+    "init",
+    "--name",
+    "Cook Club",
+    "--host-name",
+    "Alice",
+  ]);
   assert.equal(result.status, 0);
 
   result = runCli([
@@ -701,7 +918,7 @@ test("CLI meetup list and meetup show --id expose meetup history", () => {
     "--actor",
     "user_1",
     "--at",
-    "2026-04-03T18:30:00.000Z"
+    "2026-04-03T18:30:00.000Z",
   ]);
   assert.equal(result.status, 0);
   const scheduled = parseJsonStdout(result);

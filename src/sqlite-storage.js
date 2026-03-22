@@ -13,11 +13,13 @@ const ENTITY_TABLES = [
   "personal_collections",
   "collection_items",
   "cookbook_access_grants",
-  "notifications"
+  "notifications",
 ];
 
 function tableExists(db, name) {
-  const row = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(name);
+  const row = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .get(name);
   return Boolean(row?.name);
 }
 
@@ -29,6 +31,119 @@ function columnExists(db, table, column) {
 function tableHasForeignKeys(db, table) {
   const rows = db.prepare(`PRAGMA foreign_key_list(${table})`).all();
   return rows.length > 0;
+}
+
+function normalizeOptionalString(value) {
+  if (value === undefined || value === null) return null;
+  const trimmed = String(value).trim();
+  return trimmed ? trimmed : null;
+}
+
+function normalizeTextList(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => (typeof item === "string" ? item.trim() : "")).filter(Boolean);
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? [trimmed] : [];
+  }
+  return [];
+}
+
+function normalizeInstructions(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((step) => {
+      if (typeof step === "string") {
+        const text = step.trim();
+        return text ? { text } : null;
+      }
+      if (!step || typeof step !== "object") return null;
+      const text = normalizeOptionalString(step.text);
+      if (!text) return null;
+      const name = normalizeOptionalString(step.name);
+      return name ? { name, text } : { text };
+    })
+    .filter(Boolean);
+}
+
+function serializeRecipeDetails(item) {
+  const name = normalizeOptionalString(item.name) || normalizeOptionalString(item.title) || "";
+  const description =
+    normalizeOptionalString(item.description) || normalizeOptionalString(item.content);
+  const image = Array.isArray(item.image)
+    ? item.image.filter((entry) => normalizeOptionalString(entry))
+    : normalizeTextList(item.imagePath);
+  const recipeIngredient = normalizeTextList(item.recipeIngredient);
+  const recipeInstructions =
+    normalizeInstructions(item.recipeInstructions).length > 0
+      ? normalizeInstructions(item.recipeInstructions)
+      : normalizeOptionalString(item.content)
+        ? [{ text: String(item.content).trim() }]
+        : [];
+  const details = {
+    schemaType: normalizeOptionalString(item.schemaType) || "Recipe",
+    schemaVersion: Number.isFinite(Number(item.schemaVersion)) ? Number(item.schemaVersion) : 2,
+    name,
+    description,
+    image,
+    recipeIngredient: recipeIngredient.length ? recipeIngredient : description ? [description] : [],
+    recipeInstructions,
+    prepTime: normalizeOptionalString(item.prepTime),
+    cookTime: normalizeOptionalString(item.cookTime),
+    totalTime: normalizeOptionalString(item.totalTime),
+    recipeYield: normalizeOptionalString(item.recipeYield),
+    recipeCategory: normalizeOptionalString(item.recipeCategory),
+    recipeCuisine: normalizeOptionalString(item.recipeCuisine),
+    keywords: normalizeTextList(item.keywords),
+    nutrition: item.nutrition && typeof item.nutrition === "object" ? item.nutrition : null,
+  };
+  return details;
+}
+
+function parseRecipeDetails(row) {
+  let parsed = {};
+  try {
+    parsed = row.recipe_json ? JSON.parse(row.recipe_json) : {};
+  } catch {
+    parsed = {};
+  }
+  const details = serializeRecipeDetails({
+    ...row,
+    ...parsed,
+    title: row.title,
+    content: row.content,
+    imagePath: row.image_path,
+  });
+  return {
+    schemaType: details.schemaType,
+    schemaVersion: Number.isFinite(Number(details.schemaVersion))
+      ? Number(details.schemaVersion)
+      : Number.isFinite(Number(row.schema_version))
+        ? Number(row.schema_version)
+        : 1,
+    name: details.name || row.title,
+    description: details.description,
+    image: details.image.length ? details.image : [row.image_path].filter(Boolean),
+    recipeIngredient: details.recipeIngredient.length
+      ? details.recipeIngredient
+      : row.content
+        ? [row.content]
+        : [],
+    recipeInstructions: details.recipeInstructions.length
+      ? details.recipeInstructions
+      : row.content
+        ? [{ text: row.content }]
+        : [],
+    prepTime: details.prepTime,
+    cookTime: details.cookTime,
+    totalTime: details.totalTime,
+    recipeYield: details.recipeYield,
+    recipeCategory: details.recipeCategory,
+    recipeCuisine: details.recipeCuisine,
+    keywords: details.keywords,
+    nutrition: details.nutrition,
+  };
 }
 
 function applyMigration1(db) {
@@ -88,6 +203,8 @@ function applyMigration1(db) {
       title TEXT NOT NULL,
       content TEXT NOT NULL,
       image_path TEXT NOT NULL,
+      schema_version INTEGER NOT NULL DEFAULT 1,
+      recipe_json TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL
     );
 
@@ -167,7 +284,7 @@ function writeStateToNormalizedTables(db, state) {
   }
 
   const insertClub = db.prepare(
-    "INSERT INTO clubs (id, name, host_user_id, membership_policy, reminder_policy_json, reminder_templates_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    "INSERT INTO clubs (id, name, host_user_id, membership_policy, reminder_policy_json, reminder_templates_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
   );
   for (const item of clean.clubs) {
     insertClub.run(
@@ -177,77 +294,109 @@ function writeStateToNormalizedTables(db, state) {
       item.membershipPolicy,
       JSON.stringify(item.reminderPolicy || {}),
       JSON.stringify(item.reminderTemplates || {}),
-      item.createdAt
+      item.createdAt,
     );
   }
 
   const insertUser = db.prepare(
-    "INSERT INTO users (id, name, email, phone, created_at) VALUES (?, ?, ?, ?, ?)"
+    "INSERT INTO users (id, name, email, phone, created_at) VALUES (?, ?, ?, ?, ?)",
   );
   for (const item of clean.users) {
     insertUser.run(item.id, item.name, item.email, item.phone, item.createdAt);
   }
 
   const insertMembership = db.prepare(
-    "INSERT INTO memberships (id, club_id, user_id, role, joined_at, cookbook_access_from) VALUES (?, ?, ?, ?, ?, ?)"
+    "INSERT INTO memberships (id, club_id, user_id, role, joined_at, cookbook_access_from) VALUES (?, ?, ?, ?, ?, ?)",
   );
   for (const item of clean.memberships) {
-    insertMembership.run(item.id, item.clubId, item.userId, item.role, item.joinedAt, item.cookbookAccessFrom);
+    insertMembership.run(
+      item.id,
+      item.clubId,
+      item.userId,
+      item.role,
+      item.joinedAt,
+      item.cookbookAccessFrom,
+    );
   }
 
   const insertMeetup = db.prepare(
-    "INSERT INTO meetups (id, club_id, host_user_id, scheduled_for, theme, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    "INSERT INTO meetups (id, club_id, host_user_id, scheduled_for, theme, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
   );
   for (const item of clean.meetups) {
-    insertMeetup.run(item.id, item.clubId, item.hostUserId, item.scheduledFor, item.theme, item.status, item.createdAt);
+    insertMeetup.run(
+      item.id,
+      item.clubId,
+      item.hostUserId,
+      item.scheduledFor,
+      item.theme,
+      item.status,
+      item.createdAt,
+    );
   }
 
   const insertRecipe = db.prepare(
-    "INSERT INTO recipes (id, club_id, meetup_id, author_user_id, title, content, image_path, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    "INSERT INTO recipes (id, club_id, meetup_id, author_user_id, title, content, image_path, schema_version, recipe_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
   );
   for (const item of clean.recipes) {
+    const details = serializeRecipeDetails(item);
+    const title = normalizeOptionalString(item.title) || details.name;
+    const content =
+      normalizeOptionalString(item.content) ||
+      details.description ||
+      details.recipeInstructions.map((step) => step.text).join(" ");
+    const imagePath =
+      normalizeOptionalString(item.imagePath) || normalizeOptionalString(details.image[0]) || "";
     insertRecipe.run(
       item.id,
       item.clubId,
       item.meetupId,
       item.authorUserId,
-      item.title,
-      item.content,
-      item.imagePath,
-      item.createdAt
+      title,
+      content,
+      imagePath,
+      details.schemaVersion,
+      JSON.stringify(details),
+      item.createdAt,
     );
   }
 
   const insertFavorite = db.prepare(
-    "INSERT INTO favorites (id, user_id, recipe_id, created_at) VALUES (?, ?, ?, ?)"
+    "INSERT INTO favorites (id, user_id, recipe_id, created_at) VALUES (?, ?, ?, ?)",
   );
   for (const item of clean.favorites) {
     insertFavorite.run(item.id, item.userId, item.recipeId, item.createdAt);
   }
 
   const insertCollection = db.prepare(
-    "INSERT INTO personal_collections (id, user_id, name, created_at) VALUES (?, ?, ?, ?)"
+    "INSERT INTO personal_collections (id, user_id, name, created_at) VALUES (?, ?, ?, ?)",
   );
   for (const item of clean.personalCollections) {
     insertCollection.run(item.id, item.userId, item.name, item.createdAt);
   }
 
   const insertCollectionItem = db.prepare(
-    "INSERT INTO collection_items (id, collection_id, recipe_id, created_at) VALUES (?, ?, ?, ?)"
+    "INSERT INTO collection_items (id, collection_id, recipe_id, created_at) VALUES (?, ?, ?, ?)",
   );
   for (const item of clean.collectionItems) {
     insertCollectionItem.run(item.id, item.collectionId, item.recipeId, item.createdAt);
   }
 
   const insertAccessGrant = db.prepare(
-    "INSERT INTO cookbook_access_grants (id, club_id, user_id, meetup_id, granted_by_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+    "INSERT INTO cookbook_access_grants (id, club_id, user_id, meetup_id, granted_by_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
   );
   for (const item of clean.cookbookAccessGrants) {
-    insertAccessGrant.run(item.id, item.clubId, item.userId, item.meetupId, item.grantedByUserId, item.createdAt);
+    insertAccessGrant.run(
+      item.id,
+      item.clubId,
+      item.userId,
+      item.meetupId,
+      item.grantedByUserId,
+      item.createdAt,
+    );
   }
 
   const insertNotification = db.prepare(
-    "INSERT INTO notifications (id, club_id, user_id, type, key, payload_json, due_at, created_at, delivered_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    "INSERT INTO notifications (id, club_id, user_id, type, key, payload_json, due_at, created_at, delivered_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
   );
   for (const item of clean.notifications) {
     insertNotification.run(
@@ -259,7 +408,7 @@ function writeStateToNormalizedTables(db, state) {
       JSON.stringify(item.payload || {}),
       item.dueAt || null,
       item.createdAt,
-      item.deliveredAt || null
+      item.deliveredAt || null,
     );
   }
 }
@@ -330,6 +479,8 @@ function applyMigration5(db) {
         title TEXT NOT NULL,
         content TEXT NOT NULL,
         image_path TEXT NOT NULL,
+        schema_version INTEGER NOT NULL DEFAULT 1,
+        recipe_json TEXT NOT NULL DEFAULT '{}',
         created_at TEXT NOT NULL,
         FOREIGN KEY (club_id) REFERENCES clubs(id) ON DELETE CASCADE,
         FOREIGN KEY (meetup_id) REFERENCES meetups_new(id) ON DELETE CASCADE,
@@ -403,8 +554,8 @@ function applyMigration5(db) {
       JOIN clubs c ON c.id = mt.club_id
       JOIN users u ON u.id = mt.host_user_id;
 
-      INSERT INTO recipes_new (id, club_id, meetup_id, author_user_id, title, content, image_path, created_at)
-      SELECT r.id, r.club_id, r.meetup_id, r.author_user_id, r.title, r.content, r.image_path, r.created_at
+      INSERT INTO recipes_new (id, club_id, meetup_id, author_user_id, title, content, image_path, schema_version, recipe_json, created_at)
+      SELECT r.id, r.club_id, r.meetup_id, r.author_user_id, r.title, r.content, r.image_path, 1, '{}', r.created_at
       FROM recipes r
       JOIN clubs c ON c.id = r.club_id
       JOIN meetups_new m ON m.id = r.meetup_id
@@ -477,30 +628,84 @@ function applyMigration5(db) {
   }
 }
 
+function applyMigration6(db) {
+  if (!columnExists(db, "recipes", "schema_version")) {
+    db.exec("ALTER TABLE recipes ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1;");
+  }
+  if (!columnExists(db, "recipes", "recipe_json")) {
+    db.exec("ALTER TABLE recipes ADD COLUMN recipe_json TEXT NOT NULL DEFAULT '{}';");
+  }
+
+  const rows = db
+    .prepare("SELECT id, title, content, image_path, schema_version, recipe_json FROM recipes")
+    .all();
+  const update = db.prepare("UPDATE recipes SET schema_version = ?, recipe_json = ? WHERE id = ?");
+  for (const row of rows) {
+    let parsed = null;
+    try {
+      parsed = row.recipe_json ? JSON.parse(row.recipe_json) : null;
+    } catch {
+      parsed = null;
+    }
+    const details = serializeRecipeDetails({
+      ...parsed,
+      title: row.title,
+      content: row.content,
+      imagePath: row.image_path,
+      schemaVersion: row.schema_version,
+    });
+    update.run(details.schemaVersion, JSON.stringify(details), row.id);
+  }
+}
+
 function ensureSchema(db) {
   applyMigration1(db);
 
-  const currentVersionRow = db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get();
+  const currentVersionRow = db
+    .prepare("SELECT MAX(version) AS version FROM schema_migrations")
+    .get();
   const currentVersion = currentVersionRow?.version || 0;
 
   if (currentVersion < 1) {
-    db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(1, new Date().toISOString());
+    db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(
+      1,
+      new Date().toISOString(),
+    );
   }
   if (currentVersion < 2) {
     applyMigration2(db);
-    db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(2, new Date().toISOString());
+    db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(
+      2,
+      new Date().toISOString(),
+    );
   }
   if (currentVersion < 3) {
     applyMigration3(db);
-    db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(3, new Date().toISOString());
+    db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(
+      3,
+      new Date().toISOString(),
+    );
   }
   if (currentVersion < 4) {
     applyMigration4(db);
-    db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(4, new Date().toISOString());
+    db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(
+      4,
+      new Date().toISOString(),
+    );
   }
   if (currentVersion < 5) {
     applyMigration5(db);
-    db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(5, new Date().toISOString());
+    db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(
+      5,
+      new Date().toISOString(),
+    );
+  }
+  if (currentVersion < 6) {
+    applyMigration6(db);
+    db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(
+      6,
+      new Date().toISOString(),
+    );
   }
 }
 
@@ -524,7 +729,7 @@ export function loadStateFromSqlite(filePath) {
 
     state.clubs = db
       .prepare(
-        "SELECT id, name, host_user_id, membership_policy, reminder_policy_json, reminder_templates_json, created_at FROM clubs ORDER BY id"
+        "SELECT id, name, host_user_id, membership_policy, reminder_policy_json, reminder_templates_json, created_at FROM clubs ORDER BY id",
       )
       .all()
       .map((row) => ({
@@ -534,7 +739,7 @@ export function loadStateFromSqlite(filePath) {
         membershipPolicy: row.membership_policy,
         reminderPolicy: JSON.parse(row.reminder_policy_json || "{}"),
         reminderTemplates: JSON.parse(row.reminder_templates_json || "{}"),
-        createdAt: row.created_at
+        createdAt: row.created_at,
       }));
 
     state.users = db
@@ -545,11 +750,13 @@ export function loadStateFromSqlite(filePath) {
         name: row.name,
         email: row.email,
         phone: row.phone,
-        createdAt: row.created_at
+        createdAt: row.created_at,
       }));
 
     state.memberships = db
-      .prepare("SELECT id, club_id, user_id, role, joined_at, cookbook_access_from FROM memberships ORDER BY id")
+      .prepare(
+        "SELECT id, club_id, user_id, role, joined_at, cookbook_access_from FROM memberships ORDER BY id",
+      )
       .all()
       .map((row) => ({
         id: row.id,
@@ -557,11 +764,13 @@ export function loadStateFromSqlite(filePath) {
         userId: row.user_id,
         role: row.role,
         joinedAt: row.joined_at,
-        cookbookAccessFrom: row.cookbook_access_from
+        cookbookAccessFrom: row.cookbook_access_from,
       }));
 
     state.meetups = db
-      .prepare("SELECT id, club_id, host_user_id, scheduled_for, theme, status, created_at FROM meetups ORDER BY id")
+      .prepare(
+        "SELECT id, club_id, host_user_id, scheduled_for, theme, status, created_at FROM meetups ORDER BY id",
+      )
       .all()
       .map((row) => ({
         id: row.id,
@@ -570,24 +779,28 @@ export function loadStateFromSqlite(filePath) {
         scheduledFor: row.scheduled_for,
         theme: row.theme,
         status: row.status,
-        createdAt: row.created_at
+        createdAt: row.created_at,
       }));
 
     state.recipes = db
       .prepare(
-        "SELECT id, club_id, meetup_id, author_user_id, title, content, image_path, created_at FROM recipes ORDER BY id"
+        "SELECT id, club_id, meetup_id, author_user_id, title, content, image_path, schema_version, recipe_json, created_at FROM recipes ORDER BY id",
       )
       .all()
-      .map((row) => ({
-        id: row.id,
-        clubId: row.club_id,
-        meetupId: row.meetup_id,
-        authorUserId: row.author_user_id,
-        title: row.title,
-        content: row.content,
-        imagePath: row.image_path,
-        createdAt: row.created_at
-      }));
+      .map((row) => {
+        const details = parseRecipeDetails(row);
+        return {
+          id: row.id,
+          clubId: row.club_id,
+          meetupId: row.meetup_id,
+          authorUserId: row.author_user_id,
+          ...details,
+          title: row.title,
+          content: row.content,
+          imagePath: row.image_path,
+          createdAt: row.created_at,
+        };
+      });
 
     state.favorites = db
       .prepare("SELECT id, user_id, recipe_id, created_at FROM favorites ORDER BY id")
@@ -596,7 +809,7 @@ export function loadStateFromSqlite(filePath) {
         id: row.id,
         userId: row.user_id,
         recipeId: row.recipe_id,
-        createdAt: row.created_at
+        createdAt: row.created_at,
       }));
 
     state.personalCollections = db
@@ -606,7 +819,7 @@ export function loadStateFromSqlite(filePath) {
         id: row.id,
         userId: row.user_id,
         name: row.name,
-        createdAt: row.created_at
+        createdAt: row.created_at,
       }));
 
     state.collectionItems = db
@@ -616,11 +829,13 @@ export function loadStateFromSqlite(filePath) {
         id: row.id,
         collectionId: row.collection_id,
         recipeId: row.recipe_id,
-        createdAt: row.created_at
+        createdAt: row.created_at,
       }));
 
     state.cookbookAccessGrants = db
-      .prepare("SELECT id, club_id, user_id, meetup_id, granted_by_user_id, created_at FROM cookbook_access_grants ORDER BY id")
+      .prepare(
+        "SELECT id, club_id, user_id, meetup_id, granted_by_user_id, created_at FROM cookbook_access_grants ORDER BY id",
+      )
       .all()
       .map((row) => ({
         id: row.id,
@@ -628,11 +843,13 @@ export function loadStateFromSqlite(filePath) {
         userId: row.user_id,
         meetupId: row.meetup_id,
         grantedByUserId: row.granted_by_user_id,
-        createdAt: row.created_at
+        createdAt: row.created_at,
       }));
 
     state.notifications = db
-      .prepare("SELECT id, club_id, user_id, type, key, payload_json, due_at, created_at, delivered_at FROM notifications ORDER BY id")
+      .prepare(
+        "SELECT id, club_id, user_id, type, key, payload_json, due_at, created_at, delivered_at FROM notifications ORDER BY id",
+      )
       .all()
       .map((row) => ({
         id: row.id,
@@ -643,7 +860,7 @@ export function loadStateFromSqlite(filePath) {
         payload: JSON.parse(row.payload_json || "{}"),
         dueAt: row.due_at,
         createdAt: row.created_at,
-        deliveredAt: row.delivered_at
+        deliveredAt: row.delivered_at,
       }));
 
     return state;
@@ -673,7 +890,10 @@ export function saveStateToSqlite(filePath, state) {
 export function getSqliteStorageInfo(filePath) {
   const db = openDb(filePath);
   try {
-    const versions = db.prepare("SELECT version FROM schema_migrations ORDER BY version").all().map((v) => v.version);
+    const versions = db
+      .prepare("SELECT version FROM schema_migrations ORDER BY version")
+      .all()
+      .map((v) => v.version);
     const counts = {};
     for (const table of ENTITY_TABLES) {
       const row = db.prepare(`SELECT COUNT(*) AS total FROM ${table}`).get();
@@ -688,10 +908,16 @@ export function getSqliteStorageInfo(filePath) {
 export function runSqliteDoctor(filePath) {
   const db = openDb(filePath);
   try {
-    const integrity = db.prepare("PRAGMA integrity_check").all().map((row) => row.integrity_check);
+    const integrity = db
+      .prepare("PRAGMA integrity_check")
+      .all()
+      .map((row) => row.integrity_check);
     const foreignKeys = db.prepare("PRAGMA foreign_key_check").all();
     const missingTables = ENTITY_TABLES.filter((table) => !tableExists(db, table));
-    const migrationVersions = db.prepare("SELECT version FROM schema_migrations ORDER BY version").all().map((v) => v.version);
+    const migrationVersions = db
+      .prepare("SELECT version FROM schema_migrations ORDER BY version")
+      .all()
+      .map((v) => v.version);
     const jsonIssues = [];
 
     const clubJsonRows = db
@@ -704,7 +930,7 @@ export function runSqliteDoctor(filePath) {
         jsonIssues.push({
           table: "clubs",
           rowId: row.id,
-          column: "reminder_policy_json"
+          column: "reminder_policy_json",
         });
       }
       try {
@@ -713,7 +939,7 @@ export function runSqliteDoctor(filePath) {
         jsonIssues.push({
           table: "clubs",
           rowId: row.id,
-          column: "reminder_templates_json"
+          column: "reminder_templates_json",
         });
       }
     }
@@ -726,7 +952,20 @@ export function runSqliteDoctor(filePath) {
         jsonIssues.push({
           table: "notifications",
           rowId: row.id,
-          column: "payload_json"
+          column: "payload_json",
+        });
+      }
+    }
+
+    const recipeJsonRows = db.prepare("SELECT id, recipe_json FROM recipes").all();
+    for (const row of recipeJsonRows) {
+      try {
+        JSON.parse(row.recipe_json || "{}");
+      } catch {
+        jsonIssues.push({
+          table: "recipes",
+          rowId: row.id,
+          column: "recipe_json",
         });
       }
     }
@@ -743,7 +982,7 @@ export function runSqliteDoctor(filePath) {
       foreignKeyIssues: foreignKeys,
       missingTables,
       migrationVersions,
-      jsonIssues
+      jsonIssues,
     };
   } finally {
     db.close();
@@ -760,9 +999,16 @@ export function repairSqliteStorage(filePath) {
   let repairedJsonFields = 0;
   try {
     db.exec("BEGIN");
-    const fixClubReminderPolicy = db.prepare("UPDATE clubs SET reminder_policy_json = ? WHERE id = ?");
-    const fixClubReminderTemplates = db.prepare("UPDATE clubs SET reminder_templates_json = ? WHERE id = ?");
-    const fixNotificationPayload = db.prepare("UPDATE notifications SET payload_json = ? WHERE id = ?");
+    const fixClubReminderPolicy = db.prepare(
+      "UPDATE clubs SET reminder_policy_json = ? WHERE id = ?",
+    );
+    const fixClubReminderTemplates = db.prepare(
+      "UPDATE clubs SET reminder_templates_json = ? WHERE id = ?",
+    );
+    const fixNotificationPayload = db.prepare(
+      "UPDATE notifications SET payload_json = ? WHERE id = ?",
+    );
+    const fixRecipePayload = db.prepare("UPDATE recipes SET recipe_json = ? WHERE id = ?");
 
     const clubRows = db
       .prepare("SELECT id, reminder_policy_json, reminder_templates_json FROM clubs")
@@ -792,6 +1038,24 @@ export function repairSqliteStorage(filePath) {
       }
     }
 
+    const recipeRows = db
+      .prepare("SELECT id, title, content, image_path, schema_version, recipe_json FROM recipes")
+      .all();
+    for (const row of recipeRows) {
+      try {
+        JSON.parse(row.recipe_json || "{}");
+      } catch {
+        const details = serializeRecipeDetails({
+          title: row.title,
+          content: row.content,
+          imagePath: row.image_path,
+          schemaVersion: row.schema_version,
+        });
+        fixRecipePayload.run(JSON.stringify(details), row.id);
+        repairedJsonFields += 1;
+      }
+    }
+
     db.exec("COMMIT");
     db.exec("PRAGMA optimize;");
     db.exec("VACUUM;");
@@ -806,6 +1070,6 @@ export function repairSqliteStorage(filePath) {
     repaired: true,
     backupPath,
     repairedJsonFields,
-    ...doctor
+    ...doctor,
   };
 }
